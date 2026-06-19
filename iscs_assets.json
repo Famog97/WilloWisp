@@ -1,0 +1,711 @@
+{
+  "text_assets": [
+    {
+      "id": "TXT_0001",
+      "name": "a",
+      "value": "a",
+      "description": "",
+      "created_at": "2026-06-15 10:31:46",
+      "updated_at": "2026-06-16 15:37:31"
+    },
+    {
+      "id": "TXT_0002",
+      "name": "Verify Custom (username)",
+      "value": "BUCS",
+      "description": "",
+      "created_at": "2026-06-16 15:39:58",
+      "updated_at": "2026-06-16 15:39:58"
+    },
+    {
+      "id": "TXT_0003",
+      "name": "CheckWadiHanaDepot Door - text",
+      "value": "Door",
+      "description": "",
+      "created_at": "2026-06-18 14:58:34",
+      "updated_at": "2026-06-18 14:58:34"
+    },
+    {
+      "id": "TXT_0004",
+      "name": "CheckWadiHanaDepot Door - text",
+      "value": "Door",
+      "description": "",
+      "created_at": "2026-06-18 14:58:54",
+      "updated_at": "2026-06-18 14:58:54"
+    },
+    {
+      "id": "TXT_0005",
+      "name": "Verify Custom (asset bound) - text",
+      "value": "ISCS",
+      "description": "",
+      "created_at": "2026-06-18 17:00:59",
+      "updated_at": "2026-06-18 17:00:59"
+    }
+  ],
+  "image_assets": [
+    {
+      "id": "IMG_0001",
+      "name": "a",
+      "filename": "IMG_0001.png",
+      "description": "",
+      "width": 280,
+      "height": 80,
+      "created_at": "2026-06-15 10:47:33",
+      "updated_at": "2026-06-15 10:47:33"
+    },
+    {
+      "id": "IMG_0002",
+      "name": "check Home",
+      "filename": "IMG_0002.png",
+      "description": "",
+      "width": 29,
+      "height": 27,
+      "created_at": "2026-06-16 14:35:24",
+      "updated_at": "2026-06-16 14:40:27"
+    },
+    {
+      "id": "IMG_0003",
+      "name": "check Home",
+      "filename": "IMG_0003.png",
+      "description": "",
+      "width": 29,
+      "height": 27,
+      "created_at": "2026-06-16 14:36:34",
+      "updated_at": "2026-06-16 14:36:34"
+    },
+    {
+      "id": "IMG_0004",
+      "name": "Verify Custom home pic",
+      "filename": "IMG_0004.png",
+      "description": "",
+      "width": 29,
+      "height": 20,
+      "created_at": "2026-06-16 14:42:14",
+      "updated_at": "2026-06-16 14:42:14"
+    },
+    {
+      "id": "IMG_0005",
+      "name": "Verify Custom (AMS)",
+      "filename": "IMG_0005.png",
+      "description": "",
+      "width": 237,
+      "height": 46,
+      "created_at": "2026-06-16 15:00:45",
+      "updated_at": "2026-06-16 15:00:45"
+    },
+    {
+      "id": "IMG_0006",
+      "name": "Verify Custom (Username)",
+      "filename": "IMG_0006.png",
+      "description": "",
+      "width": 237,
+      "height": 46,
+      "created_at": "2026-06-16 15:02:19",
+      "updated_at": "2026-06-16 15:02:19"
+    },
+    {
+      "id": "IMG_0007",
+      "name": "Verify Custom home pic",
+      "filename": "IMG_0007.png",
+      "description": "",
+      "width": 29,
+      "height": 20,
+      "created_at": "2026-06-16 15:23:55",
+      "updated_at": "2026-06-16 15:23:55"
+    },
+    {
+      "id": "IMG_0008",
+      "name": "Verify Custom (AMS)",
+      "filename": "IMG_0008.png",
+      "description": "",
+      "width": 237,
+      "height": 46,
+      "created_at": "2026-06-16 15:24:02",
+      "updated_at": "2026-06-16 15:24:02"
+    },
+    {
+      "id": "IMG_0009",
+      "name": "Verify Custom (AMS)",
+      "filename": "IMG_0009.png",
+      "description": "",
+      "width": 237,
+      "height": 46,
+      "created_at": "2026-06-16 15:24:12",
+      "updated_at": "2026-06-16 15:24:12"
+    },
+    {
+      "id": "IMG_0010",
+      "name": "Verify Custom (AMSPIC)",
+      "filename": "IMG_0010.png",
+      "description": "",
+      "width": 69,
+      "height": 40,
+      "created_at": "2026-06-16 15:38:09",
+      "updated_at": "2026-06-16 15:38:09"
+    },
+    {
+      "id": "IMG_0011",
+      "name": "CheckWadiHanaDepot Door - image",
+      "filename": "IMG_0011.png",
+      "description": "",
+      "width": 548,
+      "height": 205,
+      "created_at": "2026-06-18 14:58:34",
+      "updated_at": "2026-06-18 14:58:34"
+    },
+    {
+      "id": "IMG_0012",
+      "name": "CheckWadiHanaDepot Door - image",
+      "filename": "IMG_0012.png",
+      "description": "",
+      "width": 548,
+      "height": 205,
+      "created_at": "2026-06-18 14:58:54",
+      "updated_at": "2026-06-18 14:58:54"
+    },
+    {
+      "id": "IMG_0013",
+      "name": "Verify Custom (asset bound) - image",
+      "filename": "IMG_0013.png",
+      "description": "",
+      "width": 137,
+      "height": 35,
+      "created_at": "2026-06-18 17:00:59",
+      "updated_at": "2026-06-18 17:00:59"
+    }
+  ],
+  "regions": [
+    {
+      "id": "RGN_0001",
+      "name": "s",
+      "x1": 0,
+      "y1": 0,
+      "x2": 6,
+      "y2": 6,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-15 10:47:44",
+      "updated_at": "2026-06-15 10:47:44"
+    },
+    {
+      "id": "RGN_0002",
+      "name": "check Home - region",
+      "x1": -760,
+      "y1": 149,
+      "x2": -731,
+      "y2": 176,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-16 14:35:24",
+      "updated_at": "2026-06-16 14:40:31"
+    },
+    {
+      "id": "RGN_0003",
+      "name": "Verify Custom home pic - region",
+      "x1": -757,
+      "y1": 101,
+      "x2": -728,
+      "y2": 121,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-16 14:42:14",
+      "updated_at": "2026-06-16 14:42:14"
+    },
+    {
+      "id": "RGN_0004",
+      "name": "Verify Custom (AMS) - region",
+      "x1": -239,
+      "y1": 96,
+      "x2": -2,
+      "y2": 142,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-16 15:00:45",
+      "updated_at": "2026-06-16 15:00:45"
+    },
+    {
+      "id": "RGN_0005",
+      "name": "Verify Custom (AMSPIC) - region",
+      "x1": -1026,
+      "y1": 271,
+      "x2": -957,
+      "y2": 311,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-16 15:38:09",
+      "updated_at": "2026-06-16 15:38:09"
+    },
+    {
+      "id": "RGN_0006",
+      "name": "Verify Custom (username) - region",
+      "x1": -164,
+      "y1": 136,
+      "x2": -88,
+      "y2": 163,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-16 15:39:58",
+      "updated_at": "2026-06-16 15:39:58"
+    },
+    {
+      "id": "RGN_0007",
+      "name": "CheckWadiHanaDepot Door - region",
+      "x1": -1769,
+      "y1": 514,
+      "x2": -1221,
+      "y2": 719,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-18 14:58:34",
+      "updated_at": "2026-06-18 14:58:34"
+    },
+    {
+      "id": "RGN_0008",
+      "name": "Verify Custom (asset bound) - region",
+      "x1": -894,
+      "y1": 95,
+      "x2": -757,
+      "y2": 130,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-18 17:00:59",
+      "updated_at": "2026-06-18 17:00:59"
+    }
+  ],
+  "flow_templates": [
+    {
+      "id": "TPL_0005",
+      "name": "2point+2DiffCustom",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "trigger_alarm",
+          "category": "action",
+          "name": "Trigger Alarm",
+          "enabled": true,
+          "order": 10,
+          "params": {},
+          "description": "Send alarm signal via configured protocol (Modbus/SNMP).",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "verify_alarm_panel",
+          "category": "verification",
+          "name": "Verify Alarm Panel",
+          "enabled": true,
+          "order": 20,
+          "params": {},
+          "description": "OCR + color check on the alarm panel zone after trigger.",
+          "depends_on": [
+            "Trigger Alarm"
+          ],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_alarm_list",
+          "category": "action",
+          "name": "Navigate to Alarm List",
+          "enabled": true,
+          "order": 30,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "al_x": -652,
+            "al_y": 111
+          },
+          "description": "Click Home then Alarm List nav button.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_event_list",
+          "category": "action",
+          "name": "Navigate to Event List",
+          "enabled": true,
+          "order": 40,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "ev_x": -615,
+            "ev_y": 107
+          },
+          "description": "Click Home then Event List nav button.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_equipment_page",
+          "category": "action",
+          "name": "Navigate to Equipment Page",
+          "enabled": true,
+          "order": 50,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "rc_x": -648,
+            "rc_y": 153,
+            "pg_x": -615,
+            "pg_y": 182
+          },
+          "description": "Click Home, right-click alarm row, open equipment page.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_home",
+          "category": "action",
+          "name": "Return to Home",
+          "enabled": true,
+          "order": 60,
+          "params": {
+            "home_x": -746,
+            "home_y": 109
+          },
+          "description": "Click Home button to return to main view before reset.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "reset_alarm",
+          "category": "action",
+          "name": "Reset Alarm",
+          "enabled": true,
+          "order": 70,
+          "params": {},
+          "description": "Send reset/normalize signal via configured protocol.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "verify_normalize",
+          "category": "verification",
+          "name": "Verify Normalize State",
+          "enabled": true,
+          "order": 80,
+          "params": {},
+          "description": "OCR + color check that the alarm panel returned to normal.",
+          "depends_on": [
+            "Reset Alarm"
+          ],
+          "step_id": ""
+        },
+        {
+          "proc_type": "click",
+          "category": "action",
+          "name": "Click",
+          "enabled": true,
+          "order": 90,
+          "params": {
+            "x": 0,
+            "y": 0,
+            "wait_after": 0.5
+          },
+          "description": "Click any screen coordinate. Fully independent of IO point.",
+          "depends_on": [],
+          "step_id": "STP_0040"
+        }
+      ],
+      "created_at": "2026-06-16 15:22:46",
+      "updated_at": "2026-06-16 15:22:46"
+    },
+    {
+      "id": "TPL_0006",
+      "name": "A",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "trigger_alarm",
+          "category": "action",
+          "name": "Trigger Alarm",
+          "enabled": true,
+          "order": 10,
+          "params": {},
+          "description": "Send alarm signal via configured protocol (Modbus/SNMP).",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "verify_alarm_panel",
+          "category": "verification",
+          "name": "Verify Alarm Panel",
+          "enabled": true,
+          "order": 20,
+          "params": {},
+          "description": "OCR + color check on the alarm panel zone after trigger.",
+          "depends_on": [
+            "Trigger Alarm"
+          ],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_alarm_list",
+          "category": "action",
+          "name": "Navigate to Alarm List",
+          "enabled": true,
+          "order": 30,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "al_x": -652,
+            "al_y": 111
+          },
+          "description": "Click Home then Alarm List nav button.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_event_list",
+          "category": "action",
+          "name": "Navigate to Event List",
+          "enabled": true,
+          "order": 40,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "ev_x": -615,
+            "ev_y": 107
+          },
+          "description": "Click Home then Event List nav button.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_equipment_page",
+          "category": "action",
+          "name": "Navigate to Equipment Page",
+          "enabled": true,
+          "order": 50,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "rc_x": -648,
+            "rc_y": 153,
+            "pg_x": -615,
+            "pg_y": 182
+          },
+          "description": "Click Home, right-click alarm row, open equipment page.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "navigate_home",
+          "category": "action",
+          "name": "Return to Home",
+          "enabled": true,
+          "order": 60,
+          "params": {
+            "home_x": -746,
+            "home_y": 109
+          },
+          "description": "Click Home button to return to main view before reset.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "reset_alarm",
+          "category": "action",
+          "name": "Reset Alarm",
+          "enabled": true,
+          "order": 70,
+          "params": {},
+          "description": "Send reset/normalize signal via configured protocol.",
+          "depends_on": [],
+          "step_id": ""
+        },
+        {
+          "proc_type": "verify_normalize",
+          "category": "verification",
+          "name": "Verify Normalize State",
+          "enabled": true,
+          "order": 80,
+          "params": {},
+          "description": "OCR + color check that the alarm panel returned to normal.",
+          "depends_on": [
+            "Reset Alarm"
+          ],
+          "step_id": ""
+        },
+        {
+          "proc_type": "trigger_alarm",
+          "category": "action",
+          "name": "Trigger Alarm (2)",
+          "enabled": true,
+          "order": 90,
+          "params": {},
+          "description": "Send alarm signal via configured protocol (Modbus/SNMP).",
+          "depends_on": [],
+          "step_id": "STP_0033"
+        },
+        {
+          "proc_type": "verify_alarm_panel",
+          "category": "verification",
+          "name": "Verify Alarm Panel (2)",
+          "enabled": true,
+          "order": 100,
+          "params": {},
+          "description": "OCR + color check on the alarm panel zone after trigger.",
+          "depends_on": [
+            "Trigger Alarm"
+          ],
+          "step_id": "STP_0034"
+        },
+        {
+          "proc_type": "navigate_alarm_list",
+          "category": "action",
+          "name": "Navigate to Alarm List (2)",
+          "enabled": true,
+          "order": 110,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "al_x": -652,
+            "al_y": 111
+          },
+          "description": "Click Home then Alarm List nav button.",
+          "depends_on": [],
+          "step_id": "STP_0035"
+        },
+        {
+          "proc_type": "navigate_event_list",
+          "category": "action",
+          "name": "Navigate to Event List (2)",
+          "enabled": true,
+          "order": 120,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "ev_x": -615,
+            "ev_y": 107
+          },
+          "description": "Click Home then Event List nav button.",
+          "depends_on": [],
+          "step_id": "STP_0036"
+        },
+        {
+          "proc_type": "navigate_equipment_page",
+          "category": "action",
+          "name": "Navigate to Equipment Page (2)",
+          "enabled": true,
+          "order": 130,
+          "params": {
+            "home_x": -746,
+            "home_y": 109,
+            "rc_x": -648,
+            "rc_y": 153,
+            "pg_x": -615,
+            "pg_y": 182
+          },
+          "description": "Click Home, right-click alarm row, open equipment page.",
+          "depends_on": [],
+          "step_id": "STP_0037"
+        },
+        {
+          "proc_type": "navigate_home",
+          "category": "action",
+          "name": "Return to Home (2)",
+          "enabled": true,
+          "order": 140,
+          "params": {
+            "home_x": -746,
+            "home_y": 109
+          },
+          "description": "Click Home button to return to main view before reset.",
+          "depends_on": [],
+          "step_id": "STP_0038"
+        },
+        {
+          "proc_type": "reset_alarm",
+          "category": "action",
+          "name": "Reset Alarm (2)",
+          "enabled": true,
+          "order": 150,
+          "params": {},
+          "description": "Send reset/normalize signal via configured protocol.",
+          "depends_on": [],
+          "step_id": "STP_0039"
+        },
+        {
+          "proc_type": "verify_normalize",
+          "category": "verification",
+          "name": "Verify Normalize State (2)",
+          "enabled": true,
+          "order": 160,
+          "params": {},
+          "description": "OCR + color check that the alarm panel returned to normal.",
+          "depends_on": [
+            "Reset Alarm"
+          ],
+          "step_id": "STP_0040"
+        },
+        {
+          "proc_type": "click",
+          "category": "action",
+          "name": "Click",
+          "enabled": true,
+          "order": 170,
+          "params": {
+            "x": 0,
+            "y": 0,
+            "wait_after": 0.5
+          },
+          "description": "Click any screen coordinate. Fully independent of IO point.",
+          "depends_on": [],
+          "step_id": "STP_0041"
+        }
+      ],
+      "created_at": "2026-06-16 15:40:06",
+      "updated_at": "2026-06-16 15:40:06"
+    },
+    {
+      "id": "TPL_0007",
+      "name": "RELOADSYSVIEW",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "click",
+          "category": "action",
+          "name": "Click",
+          "enabled": true,
+          "order": 0,
+          "params": {
+            "x": -557,
+            "y": 78,
+            "wait_after": 0.5
+          },
+          "description": "Click any screen coordinate. Fully independent of IO point.",
+          "depends_on": [],
+          "step_id": "STP_0021"
+        },
+        {
+          "proc_type": "delay",
+          "category": "utility",
+          "name": "Delay",
+          "enabled": true,
+          "order": 10,
+          "params": {
+            "delay_sec": 1.0
+          },
+          "description": "Pause for N seconds.",
+          "depends_on": [],
+          "step_id": "STP_0023"
+        },
+        {
+          "proc_type": "hotkey",
+          "category": "action",
+          "name": "Hotkey",
+          "enabled": true,
+          "order": 20,
+          "params": {
+            "keys": "ctrl+SHIFT+R",
+            "wait_after": 0.5
+          },
+          "description": "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape.",
+          "depends_on": [],
+          "step_id": "STP_0022"
+        }
+      ],
+      "created_at": "2026-06-18 17:08:16",
+      "updated_at": "2026-06-18 17:08:16"
+    }
+  ]
+}
