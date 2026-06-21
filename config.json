@@ -1,0 +1,14 @@
+{
+    "modbus_port": 502,
+    "tesseract_cmd": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "tesseract_lang": "eng",
+    "grid_spacing": 30,
+    "click_delay": 1.5,
+    "mouse_drift_px": 15,
+    "nav_wait_sec": 2.0,
+    "detection_duration_sec": 6.0,
+    "sampler_interval_ms": 100,
+    "datetime_sync_limit_sec": 4.0,
+    "sampler_duration_sec": 10.0,
+    "scada_timeout_sec": 8.0
+}
