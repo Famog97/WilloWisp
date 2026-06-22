@@ -134,6 +134,137 @@ class ProcedureType(str, Enum):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+#  CAPABILITY REGISTRY BRIDGE  (Phase 1 — additive; see ARCHITECTURE_DESIGN.md)
+# ═════════════════════════════════════════════════════════════════════════════
+# Single source of truth mapping each ProcedureType to the ProcedureRunner method
+# that executes it. Used by BOTH the runtime dispatch in _execute_procedure and
+# the legacy capability adapters registered below — so they can never drift.
+_LEGACY_METHOD_MAP: Dict["ProcedureType", str] = {
+    ProcedureType.TRIGGER_ALARM            : "_exec_trigger_alarm",
+    ProcedureType.RESET_ALARM              : "_exec_reset_alarm",
+    ProcedureType.NAVIGATE_HOME            : "_exec_navigate_home",
+    ProcedureType.NAVIGATE_ALARM_LIST      : "_exec_navigate_alarm_list",
+    ProcedureType.NAVIGATE_EVENT_LIST      : "_exec_navigate_event_list",
+    ProcedureType.NAVIGATE_EQUIP_PAGE      : "_exec_navigate_equip_page",
+    ProcedureType.VERIFY_ALARM_PANEL       : "_exec_verify_alarm_panel",
+    ProcedureType.VERIFY_NORMALIZE         : "_exec_verify_normalize",
+    ProcedureType.VERIFY_ALARM_LIST        : "_exec_verify_alarm_list",
+    ProcedureType.VERIFY_EVENT_LIST        : "_exec_verify_event_list",
+    ProcedureType.VERIFY_EQUIP_PAGE        : "_exec_verify_equip_page",
+    ProcedureType.DELAY                    : "_exec_delay",
+    ProcedureType.SCREENSHOT               : "_exec_screenshot",
+    ProcedureType.CLICK                    : "_exec_click",
+    ProcedureType.RIGHT_CLICK              : "_exec_right_click",
+    ProcedureType.HOTKEY                   : "_exec_hotkey",
+    ProcedureType.TYPE_TEXT                : "_exec_type_text",
+    ProcedureType.VERIFY_ALARM_PANEL_CUSTOM: "_exec_verify_alarm_panel_custom",
+    ProcedureType.VERIFY_CUSTOM            : "_exec_verify_custom",
+}
+
+
+def _category_for(proc_type: "ProcedureType") -> str:
+    """Classify a ProcedureType into a capability category."""
+    v = proc_type.value
+    if v.startswith("verify"):
+        return "verification"
+    if v in ("delay", "screenshot"):
+        return "utility"
+    return "action"
+
+
+try:
+    from iscs_core import (
+        CapabilityMeta, CapabilityRegistry, StepResult, StepStatus,
+        registry as core_registry,
+        bus as core_bus,
+        StepStarted, StepCompleted, VerificationPassed, VerificationFailed,
+        IOPointStarted, IOPointCompleted,
+    )
+    _CORE_OK = True
+except Exception as _core_err:   # pragma: no cover - exercised only when core absent
+    CapabilityMeta = CapabilityRegistry = StepResult = StepStatus = None
+    core_registry = None
+    core_bus = None
+    StepStarted = StepCompleted = VerificationPassed = VerificationFailed = None
+    IOPointStarted = IOPointCompleted = None
+    _CORE_OK = False
+    logger.info("iscs_workflow: iscs_core unavailable — capability bridge disabled (%s)", _core_err)
+
+
+def _noop_log(_msg: str) -> None:
+    pass
+
+
+if _CORE_OK:
+
+    @dataclass
+    class LegacyExecContext:
+        """Carries the collaborators a legacy ``_exec_*`` needs, so a stateless
+        capability adapter can invoke it. Bridges the old executor signature
+        ``(proc, exec_ctx, sampler_ok, log)`` to the uniform ``execute(ctx)``."""
+        runner: Any
+        proc: "Procedure"
+        exec: "ExecContext"
+        sampler_ok: bool = False
+        log: Callable[[str], None] = _noop_log
+
+    def _to_step_status(status: Any) -> "StepStatus":
+        # Map by NAME, not value: ProcedureStatus.ERROR == "error" (lowercase)
+        # but StepStatus.ERROR == "ERROR". Names match (PASS/FAIL/SKIP/ERROR).
+        name = getattr(status, "name", str(status)).upper()
+        try:
+            return StepStatus[name]
+        except KeyError:
+            return StepStatus.ERROR
+
+    class LegacyCapabilityAdapter:
+        """Wraps one ``ProcedureRunner._exec_*`` method as a Capability keyed by
+        the ProcedureType value. Behavior-preserving: ``execute`` forwards to the
+        existing executor and normalizes its ``(status, verify_results,
+        screenshot)`` return into a ``StepResult``."""
+
+        def __init__(self, proc_type: "ProcedureType", method_name: str):
+            self.proc_type   = proc_type
+            self.key         = proc_type.value
+            self.method_name = method_name
+            self.meta = CapabilityMeta(
+                name        = proc_type.name.replace("_", " ").title(),
+                category    = _category_for(proc_type),
+                description = f"Legacy adapter for {proc_type.value}",
+            )
+
+        def execute(self, ctx: "LegacyExecContext") -> "StepResult":
+            fn = getattr(ctx.runner, self.method_name)
+            status, verify_results, screenshot = fn(ctx.proc, ctx.exec, ctx.sampler_ok, ctx.log)
+            return StepResult(
+                status     = _to_step_status(status),
+                screenshot = screenshot or "",
+                data       = {"verify_results": verify_results},
+            )
+
+    def register_legacy_capabilities(into: "Optional[CapabilityRegistry]" = None,
+                                     *, override: bool = False) -> "CapabilityRegistry":
+        """Register a LegacyCapabilityAdapter for every ProcedureType.
+        Idempotent: existing keys are skipped unless ``override=True``."""
+        target = into if into is not None else core_registry
+        for proc_type, method_name in _LEGACY_METHOD_MAP.items():
+            if target.has(proc_type.value) and not override:
+                continue
+            target.register(LegacyCapabilityAdapter(proc_type, method_name), override=override)
+        return target
+
+    # Auto-register into the global core registry at import time (FR-3 style).
+    register_legacy_capabilities()
+
+else:   # pragma: no cover - exercised only when core absent
+    LegacyExecContext = None
+    LegacyCapabilityAdapter = None
+
+    def register_legacy_capabilities(into=None, *, override: bool = False):
+        return None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 #  PROCEDURE  DATACLASS
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -606,6 +737,7 @@ class ProcedureFlow:
     @classmethod
     def from_dict(cls, d: dict) -> "ProcedureFlow":
         procs  = [Procedure.from_dict(pd) for pd in d.get("procedures", [])]
+        procs  = [p for p in procs if p is not None]   # drop unknown step types (mirrors IOGroup.from_dict)
         groups = [IOGroup.from_dict(gd)   for gd in d.get("io_groups",  [])]
         return cls(procedures=procs, io_groups=groups)
 
@@ -911,6 +1043,7 @@ class ProcedureRunner:
         on_log       : Callable[[str], None],
         stop_event   : threading.Event,
         pause_event  : threading.Event,
+        event_bus    : Any = None,
     ):
         self.flow         = flow
         self.verifier     = verifier
@@ -919,6 +1052,20 @@ class ProcedureRunner:
         self.on_log       = on_log
         self._stop        = stop_event
         self._pause       = pause_event
+        # Lifecycle event bus (FR-28). Defaults to the shared core bus; pass an
+        # explicit bus to isolate, or None to disable emission entirely. Optional
+        # so existing callers (positional args) keep working unchanged.
+        self.event_bus    = event_bus if event_bus is not None else core_bus
+
+    def _emit(self, event: Any) -> None:
+        """Publish a lifecycle event if a bus is present. Never raises — delivery
+        is isolated inside EventBus.publish (a bad subscriber can't break a run)."""
+        bus = getattr(self, "event_bus", None)
+        if bus is not None and event is not None:
+            try:
+                bus.publish(event)
+            except Exception:   # pragma: no cover - defensive belt-and-braces
+                logger.exception("event publish failed for %s", type(event).__name__)
 
     # ── Public entry point ───────────────────────────────────────────────────
 
@@ -1187,33 +1334,40 @@ class ProcedureRunner:
             logs.append(msg)
             self.on_log(f"  [{proc.name}] {msg}")
 
-        try:
-            dispatch = {
-                ProcedureType.TRIGGER_ALARM       : self._exec_trigger_alarm,
-                ProcedureType.RESET_ALARM         : self._exec_reset_alarm,
-                ProcedureType.NAVIGATE_HOME       : self._exec_navigate_home,
-                ProcedureType.NAVIGATE_ALARM_LIST : self._exec_navigate_alarm_list,
-                ProcedureType.NAVIGATE_EVENT_LIST : self._exec_navigate_event_list,
-                ProcedureType.NAVIGATE_EQUIP_PAGE : self._exec_navigate_equip_page,
-                ProcedureType.VERIFY_ALARM_PANEL  : self._exec_verify_alarm_panel,
-                ProcedureType.VERIFY_NORMALIZE    : self._exec_verify_normalize,
-                ProcedureType.VERIFY_ALARM_LIST   : self._exec_verify_alarm_list,
-                ProcedureType.VERIFY_EVENT_LIST   : self._exec_verify_event_list,
-                ProcedureType.VERIFY_EQUIP_PAGE   : self._exec_verify_equip_page,
-                ProcedureType.DELAY               : self._exec_delay,
-                ProcedureType.SCREENSHOT          : self._exec_screenshot,
-                ProcedureType.CLICK               : self._exec_click,
-                ProcedureType.RIGHT_CLICK         : self._exec_right_click,
-                ProcedureType.HOTKEY              : self._exec_hotkey,
-                ProcedureType.TYPE_TEXT           : self._exec_type_text,
-                ProcedureType.VERIFY_ALARM_PANEL_CUSTOM: self._exec_verify_alarm_panel_custom,
-                ProcedureType.VERIFY_CUSTOM             : self._exec_verify_custom,
-            }
-            fn = dispatch.get(proc.proc_type)
-            if fn is None:
-                raise NotImplementedError(f"No executor for {proc.proc_type}")
+        if _CORE_OK:
+            self._emit(StepStarted(step_key=proc.proc_type.value, step_name=proc.name))
 
-            status, verify_results, screenshot = fn(proc, ctx, sampler_ok, log)
+        try:
+            # ── Capability registry path (P1.3) ─────────────────────────────────
+            # Resolve the capability for this step's key from the registry and run
+            # it through the uniform execute(ctx) contract. Today the registry holds
+            # LegacyCapabilityAdapters (which forward to the same _exec_* methods),
+            # so this is behavior-neutral — but a real capability registered for a
+            # key will automatically supersede its legacy adapter (Phase 3), with no
+            # change here. Falls back to the direct legacy method when the registry
+            # is unavailable or the key is unregistered.
+            cap = None
+            if core_registry is not None:
+                try:
+                    cap = core_registry.get(proc.proc_type.value)
+                except Exception:
+                    cap = None
+
+            if cap is not None:
+                exec_ctx    = LegacyExecContext(runner=self, proc=proc, exec=ctx,
+                                                sampler_ok=sampler_ok, log=log)
+                step_result = cap.execute(exec_ctx)
+                # Convert StepResult back to the legacy tuple (status by NAME so
+                # StepStatus.ERROR → ProcedureStatus.ERROR round-trips correctly).
+                status         = ProcedureStatus[step_result.status.name]
+                verify_results = step_result.data.get("verify_results", [])
+                screenshot     = step_result.screenshot
+            else:
+                method_name = _LEGACY_METHOD_MAP.get(proc.proc_type)
+                fn = getattr(self, method_name) if method_name else None
+                if fn is None:
+                    raise NotImplementedError(f"No executor for {proc.proc_type}")
+                status, verify_results, screenshot = fn(proc, ctx, sampler_ok, log)
 
         except Exception as exc:
             status         = ProcedureStatus.ERROR
@@ -1227,6 +1381,19 @@ class ProcedureRunner:
 
         t1  = datetime.datetime.now()
         dur = (t1 - t0).total_seconds() * 1000
+
+        if _CORE_OK:
+            status_name = getattr(status, "name", str(status)).upper()
+            self._emit(StepCompleted(step_key=proc.proc_type.value, step_name=proc.name,
+                                     status=status_name, duration_ms=dur))
+            if _category_for(proc.proc_type) == "verification":
+                if status_name == "PASS":
+                    self._emit(VerificationPassed(step_key=proc.proc_type.value,
+                                                  step_name=proc.name))
+                elif status_name in ("FAIL", "ERROR"):
+                    self._emit(VerificationFailed(step_key=proc.proc_type.value,
+                                                  step_name=proc.name,
+                                                  message=error_detail or ""))
 
         return ProcedureResult(
             procedure_name  = proc.name,

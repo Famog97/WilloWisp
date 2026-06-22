@@ -1,0 +1,44 @@
+# Self-contained project config for WilloWisp (the contents of this folder).
+# Lives at the folder root so the test + coverage setup travels with the code:
+# copy these contents into any repo and `python -m pytest tests/` works as-is,
+# with no dependency on a parent-directory pyproject.toml.
+
+[project]
+name = "willowisp"
+version = "0.1.0"
+description = "WilloWisp — ISCS AutoClick test automation framework"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4,<9",
+    "hypothesis>=6.100,<7",
+    "pytest-mock>=3.12,<4",
+    "pytest-cov>=4.1,<6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
+
+[tool.coverage.run]
+source = [
+    "iscs_OCR",
+    "iscs_Sampler_Anchor",
+    "iscs_workflow",
+    "iscs_recorder",
+    "iscs_reports",
+    "iscs_assets",
+    "iscs_core",
+]
+
+[tool.coverage.report]
+show_missing = true
+# Anti-backsliding floor only — NOT a quality target. The denominator is
+# dominated by Tkinter dialogs and HTML generation that can't be unit-tested
+# without a display, so absolute % is intentionally low. Ratchet up as the
+# migration extracts pure logic out of the UI (see MIGRATION_CHECKLIST.md).
+fail_under = 18
+
+[tool.hypothesis]
+suppress_health_check = ["too_slow"]
+max_examples = 100

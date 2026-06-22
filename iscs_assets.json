@@ -39,6 +39,14 @@
       "description": "",
       "created_at": "2026-06-18 17:00:59",
       "updated_at": "2026-06-18 17:00:59"
+    },
+    {
+      "id": "TXT_0006",
+      "name": "Verify Custom (asset bound) - text",
+      "value": "PAS & PIDS",
+      "description": "",
+      "created_at": "2026-06-19 18:09:31",
+      "updated_at": "2026-06-19 18:09:31"
     }
   ],
   "image_assets": [
@@ -171,6 +179,36 @@
       "height": 35,
       "created_at": "2026-06-18 17:00:59",
       "updated_at": "2026-06-18 17:00:59"
+    },
+    {
+      "id": "IMG_0014",
+      "name": "Verify Custom (asset bound) - image",
+      "filename": "IMG_0014.png",
+      "description": "",
+      "width": 88,
+      "height": 20,
+      "created_at": "2026-06-19 18:09:31",
+      "updated_at": "2026-06-19 18:09:31"
+    },
+    {
+      "id": "IMG_0015",
+      "name": "Verify Custom (asset bound)",
+      "filename": "IMG_0015.png",
+      "description": "",
+      "width": 27,
+      "height": 26,
+      "created_at": "2026-06-19 18:11:14",
+      "updated_at": "2026-06-19 18:11:14"
+    },
+    {
+      "id": "IMG_0016",
+      "name": "Verify Custom (asset bound)",
+      "filename": "IMG_0016.png",
+      "description": "",
+      "width": 27,
+      "height": 26,
+      "created_at": "2026-06-19 18:12:01",
+      "updated_at": "2026-06-19 18:12:01"
     }
   ],
   "regions": [
@@ -269,6 +307,30 @@
       "description": "",
       "created_at": "2026-06-18 17:00:59",
       "updated_at": "2026-06-18 17:00:59"
+    },
+    {
+      "id": "RGN_0009",
+      "name": "Verify Custom (asset bound) - region",
+      "x1": 1327,
+      "y1": 210,
+      "x2": 1415,
+      "y2": 230,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-19 18:09:31",
+      "updated_at": "2026-06-19 18:09:31"
+    },
+    {
+      "id": "RGN_0010",
+      "name": "Verify Custom (asset bound) - region",
+      "x1": 1164,
+      "y1": 29,
+      "x2": 1191,
+      "y2": 55,
+      "monitor_index": 0,
+      "description": "",
+      "created_at": "2026-06-19 18:11:14",
+      "updated_at": "2026-06-19 18:11:14"
     }
   ],
   "flow_templates": [
@@ -706,6 +768,204 @@
       ],
       "created_at": "2026-06-18 17:08:16",
       "updated_at": "2026-06-18 17:08:16"
+    },
+    {
+      "id": "TPL_0008",
+      "name": "demotvvvvvv",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "type_text",
+          "category": "action",
+          "name": "cmd",
+          "enabled": true,
+          "order": 10,
+          "params": {
+            "text": "cmd",
+            "x": 588,
+            "y": 1058,
+            "wait_after": 0.3,
+            "interval": 0.05
+          },
+          "description": "Type text. Set x/y to click a field first (0 = skip click).",
+          "depends_on": [],
+          "step_id": "STP_0026"
+        },
+        {
+          "proc_type": "hotkey",
+          "category": "action",
+          "name": "Hotkey",
+          "enabled": true,
+          "order": 20,
+          "params": {
+            "keys": "enter",
+            "wait_after": 0.5
+          },
+          "description": "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape.",
+          "depends_on": [],
+          "step_id": "STP_0027"
+        },
+        {
+          "proc_type": "type_text",
+          "category": "action",
+          "name": "Type Text",
+          "enabled": true,
+          "order": 30,
+          "params": {
+            "text": "dir",
+            "x": 1205,
+            "y": 447,
+            "wait_after": 0.3,
+            "interval": 0.05
+          },
+          "description": "Type text. Set x/y to click a field first (0 = skip click).",
+          "depends_on": [],
+          "step_id": "STP_0028"
+        },
+        {
+          "proc_type": "hotkey",
+          "category": "action",
+          "name": "Hotkey (2)",
+          "enabled": true,
+          "order": 40,
+          "params": {
+            "keys": "enter",
+            "wait_after": 0.5
+          },
+          "description": "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape.",
+          "depends_on": [],
+          "step_id": "STP_0029"
+        }
+      ],
+      "created_at": "2026-06-19 17:55:24",
+      "updated_at": "2026-06-19 17:55:24"
+    },
+    {
+      "id": "TPL_0009",
+      "name": "open cmd type dir",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "type_text",
+          "category": "action",
+          "name": "cmd",
+          "enabled": true,
+          "order": 10,
+          "params": {
+            "text": "cmd",
+            "x": 588,
+            "y": 1058,
+            "wait_after": 0.3,
+            "interval": 0.05
+          },
+          "description": "Type text. Set x/y to click a field first (0 = skip click).",
+          "depends_on": [],
+          "step_id": "STP_0038"
+        },
+        {
+          "proc_type": "hotkey",
+          "category": "action",
+          "name": "Hotkey",
+          "enabled": true,
+          "order": 20,
+          "params": {
+            "keys": "enter",
+            "wait_after": 0.5
+          },
+          "description": "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape.",
+          "depends_on": [],
+          "step_id": "STP_0039"
+        },
+        {
+          "proc_type": "delay",
+          "category": "utility",
+          "name": "Delay",
+          "enabled": true,
+          "order": 30,
+          "params": {
+            "delay_sec": 3.0
+          },
+          "description": "Pause for N seconds.",
+          "depends_on": [],
+          "step_id": "STP_0042"
+        },
+        {
+          "proc_type": "click",
+          "category": "action",
+          "name": "ClickTaskbar",
+          "enabled": true,
+          "order": 40,
+          "params": {
+            "x": 1356,
+            "y": 1060,
+            "wait_after": 0.5
+          },
+          "description": "Click any screen coordinate. Fully independent of IO point.",
+          "depends_on": [],
+          "step_id": "STP_0043"
+        },
+        {
+          "proc_type": "type_text",
+          "category": "action",
+          "name": "Type Text",
+          "enabled": true,
+          "order": 50,
+          "params": {
+            "text": "dir",
+            "x": 1358,
+            "y": 1057,
+            "wait_after": 0.3,
+            "interval": 1.0
+          },
+          "description": "Type text. Set x/y to click a field first (0 = skip click).",
+          "depends_on": [],
+          "step_id": "STP_0040"
+        },
+        {
+          "proc_type": "hotkey",
+          "category": "action",
+          "name": "Hotkey (2)",
+          "enabled": true,
+          "order": 60,
+          "params": {
+            "keys": "enter",
+            "wait_after": 0.5
+          },
+          "description": "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape.",
+          "depends_on": [],
+          "step_id": "STP_0041"
+        }
+      ],
+      "created_at": "2026-06-19 18:04:07",
+      "updated_at": "2026-06-19 18:04:07"
+    },
+    {
+      "id": "TPL_0010",
+      "name": "IMAGE",
+      "description": "",
+      "steps": [
+        {
+          "proc_type": "verify_custom",
+          "category": "verification",
+          "name": "Verify Custom (asset bound)",
+          "enabled": true,
+          "order": 0,
+          "params": {},
+          "description": "Checks that matches the reference image in the selected region.",
+          "depends_on": [],
+          "step_id": "STP_0044",
+          "binding": {
+            "type": "IMAGE",
+            "asset_id": "IMG_0015",
+            "image_asset_id": "",
+            "region_id": "RGN_0010",
+            "threshold": 0.85,
+            "on_fail": "fail"
+          }
+        }
+      ],
+      "created_at": "2026-06-19 18:11:21",
+      "updated_at": "2026-06-19 18:11:21"
     }
   ]
 }

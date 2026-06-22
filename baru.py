@@ -72,6 +72,19 @@ except ImportError as e:
     WORKFLOW_AVAILABLE = False
     print(f"WARNING: iscs_workflow.py not found — procedure engine disabled. ({e})")
 
+# ── Lifecycle event bus (optional; additive — see ARCHITECTURE_DESIGN.md) ──────
+try:
+    from iscs_core import (
+        bus as CORE_BUS,
+        SuiteStarted, SuiteCompleted, CardStarted, CardCompleted,
+    )
+    _CORE_EVENTS_OK = True
+except Exception as _ce:
+    CORE_BUS = None
+    SuiteStarted = SuiteCompleted = CardStarted = CardCompleted = None
+    _CORE_EVENTS_OK = False
+    print(f"INFO: iscs_core events unavailable — lifecycle events disabled. ({_ce})")
+
 # ── Asset repository ──────────────────────────────────────────────────────────
 try:
     from iscs_assets import set_app_dir as _set_asset_app_dir, AssetManager
@@ -1887,9 +1900,12 @@ class FailureEvidenceCollector:
         }
 
 class SuiteRunner(threading.Thread):
-    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None):
+    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None):
         super().__init__(daemon=True)
         self.scenarios, self.monitors, self.protocols = scenarios, monitors, protocols
+        # Lifecycle event bus (FR-28). Additive: events are published alongside the
+        # existing recorder callbacks / report call; nothing depends on a subscriber.
+        self.event_bus = event_bus if event_bus is not None else CORE_BUS
         self.rerun_failed_count = rerun_failed_count  # -1 = till pass, 0 = disabled, N = N times
         self.config = config
         self.suite_title = suite_title.strip()
@@ -1906,7 +1922,17 @@ class SuiteRunner(threading.Thread):
         self._on_rec_update = on_rec_update  # (rec, point_id, equip_desc, attr_desc)
         self._active_rec    = None           # currently running Recorder (or None)
 
-    def stop(self): 
+    def _emit(self, event):
+        """Publish a lifecycle event if a bus + event class are present. Never
+        raises — EventBus.publish isolates subscriber errors (NFR-11)."""
+        bus = getattr(self, "event_bus", None)
+        if bus is not None and event is not None:
+            try:
+                bus.publish(event)
+            except Exception:
+                pass
+
+    def stop(self):
         self._stop_event.set()
         self._pause_event.set()
         # Abort all running samplers instantly
@@ -1976,6 +2002,7 @@ class SuiteRunner(threading.Thread):
 
             suite_results_accum = []  # Master accumulator for the consolidated report
             suite_start_time = datetime.datetime.now()
+            self._emit(SuiteStarted(title=self.suite_title or "ISCS Test Suite Run") if _CORE_EVENTS_OK else None)
 
             for sc_idx, sc in enumerate(self.scenarios):
                 if self._stop_event.is_set(): break
@@ -1994,6 +2021,10 @@ class SuiteRunner(threading.Thread):
                     
                     scenario_folder_name = f"{sc_idx+1}_{safe_card_name}"
                     self.on_scenario_start(card_iter, -1 if card_infinite else card_loop, sc_idx+1, len(self.scenarios), sc)
+                    if _CORE_EVENTS_OK:
+                        self._emit(CardStarted(card_name=sc.name, loop=card_iter,
+                                               scenario_index=sc_idx + 1,
+                                               total_scenarios=len(self.scenarios)))
                     
                     self.current_rerun_attempt = 0
 
@@ -2054,6 +2085,15 @@ class SuiteRunner(threading.Thread):
                         item["scenario_idx"] = sc_idx + 1
                     
                     suite_results_accum.extend(sc_results_accum)
+                    if _CORE_EVENTS_OK:
+                        self._emit(CardCompleted(card_name=sc.name, loop=card_iter))
+
+            if _CORE_EVENTS_OK:
+                _passed = sum(1 for r in suite_results_accum if r.get("overall") == "PASS")
+                self._emit(SuiteCompleted(
+                    title=self.suite_title or "ISCS Test Suite Run",
+                    passed=_passed, failed=len(suite_results_accum) - _passed,
+                ))
 
             # Generate single consolidated Suite Report at Suite level
             if suite_results_accum and ReportManager is not None:
@@ -3475,7 +3515,7 @@ class SuitePanel(tk.Frame):
         # Header row: label  +  recording toggle  +  ⚙ settings
         hdr_row = tk.Frame(list_frame, bg="#0f0f0f")
         hdr_row.pack(fill="x", pady=(0, 4))
-        tk.Label(hdr_row, text="SCENARIOS  (use arrows to reorder)",
+        tk.Label(hdr_row, text="SCENARIOS",
                  bg="#0f0f0f", fg="#aaa", font=("Consolas", 8)).pack(side="left")
 
         # ⚙ recording settings button (far right)
@@ -3540,6 +3580,22 @@ class SuitePanel(tk.Frame):
             fg="#fff" if new_state else "#888",
         )
 
+    def _force_rec_off(self):
+        """Flip the REC indicator to OFF (grey 'REC OFF') — used when the user
+        declines the low-disk warning, so it is visually clear that recording is
+        not happening. Safe to schedule from the SuiteRunner worker thread."""
+        try:
+            self._rec_enabled.set(False)
+            if self._rec_settings is not None:
+                self._rec_settings.enabled = False
+            self.btn_rec_toggle.config(
+                text=self._rec_btn_texts[False],
+                bg=self._rec_btn_colors[False],
+                fg="#888",
+            )
+        except Exception:
+            pass
+
     def _open_rec_settings(self):
         """Open the recording settings dialog."""
         if self._rec_settings is None:
@@ -3576,6 +3632,9 @@ class SuitePanel(tk.Frame):
                 "Recording Warning", msg, parent=self.app,
             )
             if not proceed:
+                # User declined — flip the REC indicator to grey OFF so it is
+                # clear recording is not happening (scheduled on the main thread).
+                self.app.after(0, self._force_rec_off)
                 return None
 
         # Resolve the active monitor to capture based on settings configurations
@@ -7098,11 +7157,11 @@ class App(tk.Tk):
                 tk.Entry(sect, textvariable=var, width=width, **es).grid(row=r*2, column=1, padx=10, pady=(8, 0), sticky="w")
                 tk.Label(sect, text=desc, bg="#0f0f0f", fg="#555", font=("Consolas", 8)).grid(row=r*2+1, column=0, columnspan=2, sticky="w", pady=(0, 4))
             if expanded:
-                sect.pack(fill="x", padx=(6, 0), pady=(0, 4))
+                sect.pack(after=head, fill="x", padx=(6, 0), pady=(0, 4))
             def _toggle(_e=None):
                 st["open"] = not st["open"]
                 if st["open"]:
-                    sect.pack(fill="x", padx=(6, 0), pady=(0, 4)); arrow.config(text="▾")
+                    sect.pack(after=head, fill="x", padx=(6, 0), pady=(0, 4)); arrow.config(text="▾")
                 else:
                     sect.pack_forget(); arrow.config(text="▸")
             for _w in (head, arrow, ttl):
