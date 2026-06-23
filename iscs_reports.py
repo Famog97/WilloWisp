@@ -268,6 +268,48 @@ class ReportManager:
         # 3. Generate Excel Report (Multi-Sheet Workbook)
         cls._write_excel_report(normalized, output_path, start_time, end_time, title)
 
+        # 4. Persist raw results so any report template can be re-rendered later,
+        #    offline, with no re-run (FR-30 / FR-30e). Additive — never blocks the run.
+        try:
+            (output_path / "suite_results.json").write_text(
+                json.dumps(raw_results, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8")
+        except Exception as ex:
+            logger.warning(f"Could not write suite_results.json: {ex}")
+
+    @classmethod
+    def on_suite_completed(cls, event) -> None:
+        """EventBus handler (P2.3): generate the consolidated report when a suite
+        finishes. Subscribed to `SuiteCompleted` at app startup, so the runner no
+        longer calls generate_reports directly. Marks the event handled so the
+        runner's safety-net fallback knows the report was produced here.
+
+        Reads everything off the event and reproduces the previous behavior,
+        including the success/failure messages to the UI log.
+        """
+        results    = getattr(event, "results", None) or []
+        output_dir = getattr(event, "output_dir", None)
+        on_log     = getattr(event, "on_log", None)
+        if not results or output_dir is None:
+            return
+        # Claim handling up-front so a generation failure still suppresses the
+        # fallback (the failure is logged here, matching old behavior — we don't
+        # want a second attempt).
+        event.report_generated = True
+        try:
+            cls.generate_reports(
+                results, output_dir,
+                getattr(event, "start_time", None), getattr(event, "end_time", None),
+                title=getattr(event, "title", None) or "Test Run",
+            )
+            if callable(on_log):
+                name = getattr(output_dir, "name", str(output_dir))
+                on_log(f"✅ Consolidated Suite Report generated successfully inside: {name}")
+        except Exception as report_ex:
+            if callable(on_log):
+                on_log(f"⚠ Failed to generate consolidated suite report: {report_ex}")
+            logger.error("Suite report compilation error", exc_info=True)
+
     @classmethod
     def _scan_evidence_files(cls, output_dir: Path) -> list:
         """Recursively scans the directory using os.walk for robust path resolution."""

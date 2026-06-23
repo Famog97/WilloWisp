@@ -72,6 +72,54 @@ except ImportError as e:
     WORKFLOW_AVAILABLE = False
     print(f"WARNING: iscs_workflow.py not found — procedure engine disabled. ({e})")
 
+# ── Lifecycle event bus (optional; additive — see ARCHITECTURE_DESIGN.md) ──────
+try:
+    from iscs_core import (
+        bus as CORE_BUS,
+        SuiteStarted, SuiteCompleted, CardStarted, CardCompleted,
+        discover_directory,
+    )
+    _CORE_EVENTS_OK = True
+except Exception as _ce:
+    CORE_BUS = None
+    SuiteStarted = SuiteCompleted = CardStarted = CardCompleted = None
+    discover_directory = None
+    _CORE_EVENTS_OK = False
+    print(f"INFO: iscs_core events unavailable — lifecycle events disabled. ({_ce})")
+
+
+# Plugin categories discovered at startup (extend as capabilities are ported out
+# of the engine). Each discovered file self-registers, overriding its legacy
+# adapter by key — see plugins/README.md.
+_PLUGIN_CATEGORIES = ("utilities", "verifications", "actions")
+
+
+def _load_plugins():
+    """Discover ported capability plugins at app startup. Best-effort and isolated:
+    a broken plugin is logged + skipped, never blocking launch."""
+    if discover_directory is None:
+        return
+    base = Path(__file__).parent / "plugins"
+    for category in _PLUGIN_CATEGORIES:
+        try:
+            loaded = discover_directory(base / category)
+            if loaded:
+                print(f"INFO: loaded plugin(s) from plugins/{category}: {loaded}")
+        except Exception as _pe:
+            print(f"WARNING: plugin discovery failed for plugins/{category}: {_pe}")
+
+
+def _wire_subscribers():
+    """Subscribe event-driven subsystems to the shared bus at startup (P2.3).
+    The report subsystem generates the consolidated report on SuiteCompleted, so
+    SuiteRunner no longer calls ReportManager directly (it keeps a safety-net
+    fallback if no subscriber handled the event)."""
+    if not _CORE_EVENTS_OK or CORE_BUS is None:
+        return
+    if ReportManager is not None:
+        CORE_BUS.subscribe(SuiteCompleted, ReportManager.on_suite_completed)
+        print("INFO: report subsystem subscribed to SuiteCompleted.")
+
 # ── Asset repository ──────────────────────────────────────────────────────────
 try:
     from iscs_assets import set_app_dir as _set_asset_app_dir, AssetManager
@@ -1906,7 +1954,46 @@ class SuiteRunner(threading.Thread):
         self._on_rec_update = on_rec_update  # (rec, point_id, equip_desc, attr_desc)
         self._active_rec    = None           # currently running Recorder (or None)
 
-    def stop(self): 
+    def _emit(self, event):
+        """Publish a lifecycle event if a bus + event class are present. Never
+        raises — EventBus.publish isolates subscriber errors (NFR-11)."""
+        bus = getattr(self, "event_bus", None)
+        if bus is not None and event is not None:
+            try:
+                bus.publish(event)
+            except Exception:
+                pass
+
+    # ── Recorder lifecycle via events (B3 / P2.3) ────────────────────────────
+    def _on_event_card_started(self, event):
+        """Start the per-card recorder when a CardStarted (carrying scenario +
+        evidence_dir) arrives. Sets self._active_rec so per-point overlay updates
+        keep working, and marks the event handled so run() won't also start one."""
+        sc     = getattr(event, "scenario", None)
+        ev_dir = getattr(event, "evidence_dir", None)
+        if sc is None or ev_dir is None or not self._on_rec_start:
+            return
+        event.recorder_handled = True
+        try:
+            self._active_rec = self._on_rec_start(sc, ev_dir)
+        except Exception as _re:
+            self.on_log(f"⚠ Recorder start error: {_re}")
+            self._active_rec = None
+
+    def _on_event_card_completed(self, event):
+        """Stop the per-card recorder on CardCompleted."""
+        if not self._on_rec_stop:
+            return
+        event.recorder_handled = True
+        rec = getattr(self, "_active_rec", None)
+        if rec is not None:
+            try:
+                self._on_rec_stop(rec, getattr(event, "card_name", ""))
+            except Exception as _re:
+                self.on_log(f"⚠ Recorder stop error: {_re}")
+        self._active_rec = None
+
+    def stop(self):
         self._stop_event.set()
         self._pause_event.set()
         # Abort all running samplers instantly
@@ -1976,6 +2063,15 @@ class SuiteRunner(threading.Thread):
 
             suite_results_accum = []  # Master accumulator for the consolidated report
             suite_start_time = datetime.datetime.now()
+            self._emit(SuiteStarted(title=self.suite_title or "ISCS Test Suite Run") if _CORE_EVENTS_OK else None)
+
+            # B3: drive the recorder via Card events. Subscribe this run's recorder
+            # handlers to its bus; unsubscribed in finally so they never leak across
+            # runs. Only when recording callbacks are present.
+            self._rec_unsubs = []
+            if _CORE_EVENTS_OK and self.event_bus is not None and self._on_rec_start:
+                self._rec_unsubs.append(self.event_bus.subscribe(CardStarted, self._on_event_card_started))
+                self._rec_unsubs.append(self.event_bus.subscribe(CardCompleted, self._on_event_card_completed))
 
             for sc_idx, sc in enumerate(self.scenarios):
                 if self._stop_event.is_set(): break
@@ -1994,20 +2090,29 @@ class SuiteRunner(threading.Thread):
                     
                     scenario_folder_name = f"{sc_idx+1}_{safe_card_name}"
                     self.on_scenario_start(card_iter, -1 if card_infinite else card_loop, sc_idx+1, len(self.scenarios), sc)
-                    
                     self.current_rerun_attempt = 0
 
-                    # Start recorder
+                    # Start recorder — event-driven (CardStarted) if a subscriber
+                    # handles it, else inline (legacy) so recording is never lost.
                     _card_ev_dir = pass_dir / scenario_folder_name
                     _card_ev_dir.mkdir(parents=True, exist_ok=True)
                     _card_rec = None
-                    if self._on_rec_start:
-                        try:
-                            _card_rec = self._on_rec_start(sc, _card_ev_dir)
-                        except Exception as _re:
-                            self.on_log(f"⚠ Recorder start error: {_re}")
-
-                    self._active_rec = _card_rec
+                    _cs_evt = None
+                    if _CORE_EVENTS_OK:
+                        _cs_evt = CardStarted(card_name=sc.name, loop=card_iter,
+                                              scenario_index=sc_idx + 1,
+                                              total_scenarios=len(self.scenarios),
+                                              scenario=sc, evidence_dir=_card_ev_dir)
+                        self._emit(_cs_evt)
+                    if _cs_evt is not None and getattr(_cs_evt, "recorder_handled", False):
+                        _card_rec = self._active_rec        # started by the subscriber
+                    else:
+                        if self._on_rec_start:
+                            try:
+                                _card_rec = self._on_rec_start(sc, _card_ev_dir)
+                            except Exception as _re:
+                                self.on_log(f"⚠ Recorder start error: {_re}")
+                        self._active_rec = _card_rec
                     
                     # Run Scenario
                     sc_results_accum = self._run_scenario(sc, _card_ev_dir, card_iter, sc_idx)
@@ -2039,26 +2144,53 @@ class SuiteRunner(threading.Thread):
                             sc_results_accum.extend(rerun_results)
                             failed_ids = self._collect_failed_point_ids(sc, sc_results_accum)
                     
-                    # Stop recorder
-                    if _card_rec is not None and self._on_rec_stop:
-                        try:
-                            self._on_rec_stop(_card_rec, sc.name)
-                        except Exception as _re:
-                            self.on_log(f"⚠ Recorder stop error: {_re}")
-                    self._active_rec = None
-                    
+                    # Stop recorder — event-driven (CardCompleted) if handled, else inline.
+                    _cc_evt = None
+                    if _CORE_EVENTS_OK:
+                        _cc_evt = CardCompleted(card_name=sc.name, loop=card_iter)
+                        self._emit(_cc_evt)
+                    if not (_cc_evt is not None and getattr(_cc_evt, "recorder_handled", False)):
+                        if _card_rec is not None and self._on_rec_stop:
+                            try:
+                                self._on_rec_stop(_card_rec, sc.name)
+                            except Exception as _re:
+                                self.on_log(f"⚠ Recorder stop error: {_re}")
+                        self._active_rec = None
+
                     # Assign loop/scenario metadata to result objects
                     for item in sc_results_accum:
                         item["loop_num"] = card_iter
                         item["scenario_name"] = sc.name
                         item["scenario_idx"] = sc_idx + 1
-                    
+
                     suite_results_accum.extend(sc_results_accum)
 
-            # Generate single consolidated Suite Report at Suite level
-            if suite_results_accum and ReportManager is not None:
-                suite_end_time = datetime.datetime.now()
-                title_lbl = self.suite_title if self.suite_title else "ISCS Test Suite Run"
+            # Suite finished → emit SuiteCompleted carrying the report payload. The
+            # report subsystem generates HTML/Excel as a SUBSCRIBER (P2.3), so the
+            # runner no longer calls ReportManager directly.
+            suite_end_time = datetime.datetime.now()
+            title_lbl = self.suite_title if self.suite_title else "ISCS Test Suite Run"
+            _report_handled = False
+            if _CORE_EVENTS_OK and self.event_bus is not None:
+                _passed = sum(1 for r in suite_results_accum if r.get("overall") == "PASS")
+                _evt = SuiteCompleted(
+                    title=title_lbl,
+                    passed=_passed, failed=len(suite_results_accum) - _passed,
+                    results=suite_results_accum, output_dir=suite_dir,
+                    start_time=suite_start_time, end_time=suite_end_time,
+                    on_log=self.on_log,
+                )
+                try:
+                    self.event_bus.publish(_evt)
+                except Exception:
+                    pass
+                _report_handled = bool(getattr(_evt, "report_generated", False))
+
+            # Safety net: if NO subscriber generated the report (events off, or no
+            # report subscriber wired), generate it directly so reports are never
+            # lost. report_generated precisely tracks whether the report ran, so
+            # other (e.g. dashboard) subscribers don't suppress this fallback.
+            if not _report_handled and suite_results_accum and ReportManager is not None:
                 try:
                     ReportManager.generate_reports(
                         suite_results_accum, suite_dir, suite_start_time, suite_end_time, title=title_lbl
@@ -2069,9 +2201,16 @@ class SuiteRunner(threading.Thread):
                     logger.error("Suite report compilation error", exc_info=True)
 
             self.on_suite_done(suite_dir, "", self._stop_event.is_set())
-        except Exception as e: 
+        except Exception as e:
             self.on_log(f"Suite Crash: {e}")
             self.on_suite_done(None, str(e), True)
+        finally:
+            # B3: always unsubscribe this run's recorder handlers so they never
+            # leak onto the shared bus across runs.
+            for _unsub in getattr(self, "_rec_unsubs", []):
+                try: _unsub()
+                except Exception: pass
+            self._rec_unsubs = []
 
     def _run_scenario(self, sc, sc_dir, p_num, s_idx):
         sc_dir.mkdir(exist_ok=True)
@@ -3463,7 +3602,8 @@ class SuitePanel(tk.Frame):
         self.btn_run_suite = tk.Button(btn_row, text="▶ Run Suite", bg="#8AB5FF", fg="#fff", command=self._run_suite, state="disabled", **s_btn)
         self.btn_run_suite.pack(side="left", fill="x", expand=True, padx=(0, 2))
         tk.Button(btn_row, text="💾", bg="#222", fg="#ccc", command=self._save_suite, **s_btn).pack(side="left", padx=2)
-        tk.Button(btn_row, text="📂", bg="#222", fg="#ccc", command=self._load_suite, **s_btn).pack(side="left", padx=(2, 0))
+        tk.Button(btn_row, text="📂", bg="#222", fg="#ccc", command=self._load_suite, **s_btn).pack(side="left", padx=2)
+        tk.Button(btn_row, text="📊", bg="#222", fg="#ccc", command=self._open_report_picker, **s_btn).pack(side="left", padx=(2, 0))
 
         self.lbl_suite_progress = tk.Label(bot, text="", bg="#0f0f0f", fg="#aaa", font=("Consolas", 8), anchor="w")
         self.lbl_suite_progress.pack(fill="x", pady=(3, 0))
@@ -4192,8 +4332,77 @@ class SuitePanel(tk.Frame):
         self.app.after(0, _update)
     def _cb_pause(self, r): self.app.after(0, lambda: self.app._cb_paused(0, 0, r))
     
-    def _cb_done(self, sd, log, stp): 
+    def _cb_done(self, sd, log, stp):
+        self._last_suite_dir = sd          # remembered for the report picker (P5)
         self.after(0, lambda: self._finish(stp, error_msg=log))
+
+    def _open_report_picker(self):
+        """P5 UI picker — generate any registered report template from a finished
+        suite's saved results (suite_results.json), on demand."""
+        try:
+            import iscs_report_templates as rpt
+        except Exception as e:
+            messagebox.showerror("Reports", f"Report templates unavailable: {e}", parent=self.app)
+            return
+
+        # Resolve the results source: the last run, else let the user pick one.
+        results_path = None
+        last = getattr(self, "_last_suite_dir", None)
+        if last:
+            cand = Path(last) / "suite_results.json"
+            if cand.exists():
+                results_path = cand
+        if results_path is None:
+            picked = filedialog.askopenfilename(
+                title="Pick a suite_results.json",
+                filetypes=[("Suite results", "suite_results.json"), ("JSON files", "*.json")],
+                parent=self.app)
+            if not picked:
+                return
+            results_path = Path(picked)
+        if not results_path.exists():
+            messagebox.showinfo("Reports",
+                                "No suite_results.json found yet — run a suite first.",
+                                parent=self.app)
+            return
+
+        dlg = tk.Toplevel(self.app)
+        dlg.title("📊 Generate Report")
+        dlg.configure(bg="#0f0f0f"); dlg.geometry("440x340"); dlg.attributes("-topmost", True)
+        tk.Label(dlg, text="Generate Report As…", bg="#0f0f0f", fg="#69ff9a",
+                 font=("Consolas", 13, "bold")).pack(anchor="w", padx=14, pady=(12, 2))
+        tk.Label(dlg, text=f"Source: {results_path.parent.name}/{results_path.name}",
+                 bg="#0f0f0f", fg="#777", font=("Consolas", 8)).pack(anchor="w", padx=14, pady=(0, 8))
+
+        templates = rpt.list_templates()
+        choice = tk.StringVar(value=templates[0]["key"])
+        for t in templates:
+            tk.Radiobutton(dlg, text=f"{t['name']}   ({t['audience']})", value=t["key"],
+                           variable=choice, bg="#0f0f0f", fg="#ddd", selectcolor="#1a1a1a",
+                           activebackground="#0f0f0f", font=("Consolas", 10), anchor="w").pack(
+                           fill="x", padx=20, pady=2)
+
+        def _gen():
+            try:
+                raw = json.loads(results_path.read_text(encoding="utf-8"))
+                out = rpt.generate_template_report(
+                    choice.get(), raw, results_path.parent,
+                    title=self.title_var.get().strip() or "Test Run")
+                self.app._log(f"📊 Report generated: {out.name}")
+                dlg.destroy()
+                try:
+                    os.startfile(str(out))    # Windows — open in browser/editor
+                except Exception:
+                    pass
+            except Exception as e:
+                messagebox.showerror("Reports", f"Failed to generate report: {e}", parent=dlg)
+
+        bf = tk.Frame(dlg, bg="#0f0f0f"); bf.pack(fill="x", padx=14, pady=14)
+        tk.Button(bf, text="Generate & Open", bg="#1a3a1a", fg="#69ff9a",
+                  font=("Consolas", 10, "bold"), relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=_gen).pack(side="left")
+        tk.Button(bf, text="Cancel", bg="#222", fg="#ccc", relief="flat", padx=12, pady=6,
+                  cursor="hand2", command=dlg.destroy).pack(side="left", padx=6)
 
     def _finish(self, was_stopped=False, error_msg=""):
         if not was_stopped:
@@ -7374,5 +7583,7 @@ class App(tk.Tk):
         super().destroy()
 
 if __name__ == "__main__":
+    _load_plugins()        # discover ported capabilities (override legacy adapters by key)
+    _wire_subscribers()    # event-driven report generation (P2.3)
     app = App()
     app.mainloop()

@@ -70,6 +70,41 @@ def _get_app_dir() -> Path:
     return Path(__file__).parent
 
 
+# ── Asset-store schema versioning (FR-27) ─────────────────────────────────────
+# Tags iscs_assets.json so older/newer files coexist. Bump and register a
+# migrator when the file shape changes. Kept self-contained (no iscs_core
+# dependency) so the asset store stays standalone.
+ASSETS_SCHEMA_VERSION = 1
+_ASSET_MIGRATORS = {}   # {from_version: callable(dict) -> dict}
+
+
+def register_asset_migrator(from_version: int, fn) -> None:
+    """Register a migrator upgrading the asset file FROM `from_version` to the next."""
+    _ASSET_MIGRATORS[from_version] = fn
+
+
+def _migrate_assets_dict(raw: dict, migrators=None, current: int = ASSETS_SCHEMA_VERSION) -> dict:
+    """Upgrade a persisted asset dict to the current schema version. Missing
+    version = current (pre-versioning files are already in the current shape);
+    a newer version raises rather than silently mangling the file."""
+    migrators = _ASSET_MIGRATORS if migrators is None else migrators
+    version = raw.get("schema_version", current)
+    if not isinstance(version, int):
+        version = current
+    if version > current:
+        raise ValueError(
+            f"Asset file schema_version {version} is newer than supported ({current}). "
+            f"Upgrade the application to load this asset library."
+        )
+    while version < current:
+        migrator = migrators.get(version)
+        if migrator is None:
+            raise ValueError(f"No migrator registered to upgrade asset schema from v{version}.")
+        raw = migrator(raw)
+        version += 1
+    return raw
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  ENTITY  DATACLASSES
 # ═════════════════════════════════════════════════════════════════════════════
@@ -371,6 +406,12 @@ class AssetManager:
                 logger.error(f"iscs_assets: Failed to load {self._json_path}: {e}")
                 return
 
+            try:
+                raw = _migrate_assets_dict(raw)        # upgrade older files first (FR-27)
+            except Exception as e:
+                logger.error(f"iscs_assets: Schema migration failed: {e}")
+                return
+
             for d in raw.get("text_assets", []):
                 try:
                     t = TextAsset.from_dict(d)
@@ -415,6 +456,7 @@ class AssetManager:
         """Persist current state to iscs_assets.json (atomic write)."""
         with self._rw_lock:
             data = {
+                "schema_version": ASSETS_SCHEMA_VERSION,
                 "text_assets":    [t.to_dict() for t in self._text_assets.values()],
                 "image_assets":   [i.to_dict() for i in self._image_assets.values()],
                 "regions":        [r.to_dict() for r in self._regions.values()],

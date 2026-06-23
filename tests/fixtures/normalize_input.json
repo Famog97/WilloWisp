@@ -1,0 +1,65 @@
+[
+  {
+    "point_id": "BUCS-AMS-ACU-OCC-0008",
+    "overall": "PASS",
+    "loop_num": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "rerun_attempt": 0,
+    "screenshot": "loop_0001/1_AMS/0000_pass.png",
+    "steps": [
+      {"step": "trigger_alarm", "status": "PASS", "msg": "Alarm triggered at 14:03:11.222"},
+      {"step": "verify_alarm_panel", "status": "PASS", "msg": "identifier found; severity within"},
+      {"step": "verify_normalize", "status": "PASS", "msg": "cleared 14:03:18.900"}
+    ]
+  },
+  {
+    "point_id": "BUCS-AMS-ACU-OCC-0009",
+    "overall": "FAIL",
+    "loop_num": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "rerun_attempt": 0,
+    "screenshot": "loop_0001/1_AMS/0001_fail.png",
+    "steps": [
+      {"step": "trigger_alarm", "status": "PASS", "msg": "Alarm triggered at 14:04:01.100"},
+      {"step": "verify_alarm_panel", "status": "FAIL", "msg": "color not detected within tolerance"}
+    ]
+  },
+  {
+    "point_id": "BUCS-AMS-ACU-OCC-0009",
+    "overall": "PASS",
+    "loop_num": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "rerun_attempt": 1,
+    "screenshot": "loop_0001/1_AMS/0001_rerun_pass.png",
+    "steps": [
+      {"step": "trigger_alarm", "status": "PASS", "msg": "Alarm triggered at 14:09:30.000"},
+      {"step": "verify_alarm_panel", "status": "PASS", "msg": "color detected; identifier found"}
+    ]
+  },
+  {
+    "point_id": "BUCS-AMS-ACU-OCC-0008",
+    "overall": "FAIL",
+    "loop_num": 2,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "rerun_attempt": 0,
+    "screenshot": "loop_0002/1_AMS/0000_fail.png",
+    "steps": [
+      {"step": "verify_alarm_list", "status": "FAIL", "msg": "identifier mismatch in alarm list"}
+    ],
+    "custom_checks": [
+      {
+        "name": "Verify HIGH ALARM label",
+        "status": "FAIL",
+        "message": "text not found in region",
+        "expected": "HIGH ALARM",
+        "actual": "HIGH ALRM",
+        "asset_name": "TXT_HIGH",
+        "asset_id": "TXT_0001"
+      }
+    ]
+  }
+]

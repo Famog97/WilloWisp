@@ -1,0 +1,24 @@
+# ── Python ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ── Test / coverage artifacts ────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# ── WilloWisp run outputs (regenerated each run) ─────────
+test_logs/
+
+# ── Generated sample reports (regenerable from fixtures) ─
+samples/
+
+# ── Runtime data — uncomment if you do NOT want these in VCS ─
+# iscs_assets.json
+# iscs_metadata.db
