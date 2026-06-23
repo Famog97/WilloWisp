@@ -1,0 +1,299 @@
+[
+  {
+    "attempts": [
+      {
+        "attempt": 0,
+        "failure_category": "None",
+        "failure_diagnostics": null,
+        "failure_reason": "",
+        "overall": "PASS",
+        "screenshot": "loop_0001/1_AMS/0000_pass.png",
+        "steps": [
+          {
+            "message": "Alarm triggered at 14:03:11.222",
+            "name": "Trigger Alarm",
+            "status": "PASS"
+          },
+          {
+            "message": "identifier found; severity within",
+            "name": "Verify Alarm Panel",
+            "status": "PASS"
+          },
+          {
+            "message": "cleared 14:03:18.900",
+            "name": "Verify Normalize",
+            "status": "PASS"
+          }
+        ],
+        "trigger_info": null
+      }
+    ],
+    "failure_category": "None",
+    "failure_diagnostics": null,
+    "failure_reason": "",
+    "id": "BUCS-AMS-ACU-OCC-0008",
+    "loop_num": 1,
+    "overall": "PASS",
+    "rerun_attempt": 0,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "screenshot": "loop_0001/1_AMS/0000_pass.png",
+    "sections": [
+      {
+        "label": "🚨 Alarm Panel",
+        "normalize": [
+          {
+            "message": "cleared 14:03:18.900",
+            "name": "Verify Normalize",
+            "status": "PASS"
+          }
+        ],
+        "overall": "PASS",
+        "trigger": [
+          {
+            "message": "Alarm triggered at 14:03:11.222",
+            "name": "Trigger Alarm",
+            "status": "PASS"
+          },
+          {
+            "message": "identifier found; severity within",
+            "name": "Verify Alarm Panel",
+            "status": "PASS"
+          }
+        ]
+      },
+      {
+        "label": "📋 Alarm List",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "📅 Event List",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "🖥 Equipment Page",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      }
+    ],
+    "steps": [
+      {
+        "message": "Alarm triggered at 14:03:11.222",
+        "name": "Trigger Alarm",
+        "status": "PASS"
+      },
+      {
+        "message": "identifier found; severity within",
+        "name": "Verify Alarm Panel",
+        "status": "PASS"
+      },
+      {
+        "message": "cleared 14:03:18.900",
+        "name": "Verify Normalize",
+        "status": "PASS"
+      }
+    ],
+    "trigger_info": null
+  },
+  {
+    "attempts": [
+      {
+        "attempt": 0,
+        "failure_category": "Color Miss",
+        "failure_diagnostics": null,
+        "failure_reason": "Verify Alarm Panel: color not detected within tolerance",
+        "overall": "FAIL",
+        "screenshot": "loop_0001/1_AMS/0001_fail.png",
+        "steps": [
+          {
+            "message": "Alarm triggered at 14:04:01.100",
+            "name": "Trigger Alarm",
+            "status": "PASS"
+          },
+          {
+            "message": "color not detected within tolerance",
+            "name": "Verify Alarm Panel",
+            "status": "FAIL"
+          }
+        ],
+        "trigger_info": null
+      },
+      {
+        "attempt": 1,
+        "failure_category": "None",
+        "failure_diagnostics": null,
+        "failure_reason": "",
+        "overall": "PASS",
+        "screenshot": "loop_0001/1_AMS/0001_rerun_pass.png",
+        "steps": [
+          {
+            "message": "Alarm triggered at 14:09:30.000",
+            "name": "Trigger Alarm",
+            "status": "PASS"
+          },
+          {
+            "message": "color detected; identifier found",
+            "name": "Verify Alarm Panel",
+            "status": "PASS"
+          }
+        ],
+        "trigger_info": null
+      }
+    ],
+    "failure_category": "None",
+    "failure_diagnostics": null,
+    "failure_reason": "",
+    "id": "BUCS-AMS-ACU-OCC-0009",
+    "loop_num": 1,
+    "overall": "PASS",
+    "rerun_attempt": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "screenshot": "loop_0001/1_AMS/0001_rerun_pass.png",
+    "sections": [
+      {
+        "label": "🚨 Alarm Panel",
+        "normalize": [],
+        "overall": "PASS",
+        "trigger": [
+          {
+            "message": "Alarm triggered at 14:09:30.000",
+            "name": "Trigger Alarm",
+            "status": "PASS"
+          },
+          {
+            "message": "color detected; identifier found",
+            "name": "Verify Alarm Panel",
+            "status": "PASS"
+          }
+        ]
+      },
+      {
+        "label": "📋 Alarm List",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "📅 Event List",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "🖥 Equipment Page",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      }
+    ],
+    "steps": [
+      {
+        "message": "Alarm triggered at 14:09:30.000",
+        "name": "Trigger Alarm",
+        "status": "PASS"
+      },
+      {
+        "message": "color detected; identifier found",
+        "name": "Verify Alarm Panel",
+        "status": "PASS"
+      }
+    ],
+    "trigger_info": null
+  },
+  {
+    "attempts": [
+      {
+        "attempt": 0,
+        "failure_category": "Custom Asset Mismatch",
+        "failure_diagnostics": null,
+        "failure_reason": "Verify Alarm List: identifier mismatch in alarm list",
+        "overall": "FAIL",
+        "screenshot": "loop_0002/1_AMS/0000_fail.png",
+        "steps": [
+          {
+            "message": "identifier mismatch in alarm list",
+            "name": "Verify Alarm List",
+            "status": "FAIL"
+          },
+          {
+            "actual": "HIGH ALRM",
+            "asset_id": "TXT_0001",
+            "asset_name": "TXT_HIGH",
+            "expected": "HIGH ALARM",
+            "is_custom": true,
+            "message": "text not found in region",
+            "name": "Verify HIGH ALARM label",
+            "status": "FAIL"
+          }
+        ],
+        "trigger_info": null
+      }
+    ],
+    "failure_category": "Custom Asset Mismatch",
+    "failure_diagnostics": null,
+    "failure_reason": "Verify Alarm List: identifier mismatch in alarm list",
+    "id": "BUCS-AMS-ACU-OCC-0008",
+    "loop_num": 2,
+    "overall": "FAIL",
+    "rerun_attempt": 0,
+    "scenario_idx": 1,
+    "scenario_name": "AMS Doors",
+    "screenshot": "loop_0002/1_AMS/0000_fail.png",
+    "sections": [
+      {
+        "label": "🚨 Alarm Panel",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "📋 Alarm List",
+        "normalize": [],
+        "overall": "FAIL",
+        "trigger": [
+          {
+            "message": "identifier mismatch in alarm list",
+            "name": "Verify Alarm List",
+            "status": "FAIL"
+          }
+        ]
+      },
+      {
+        "label": "📅 Event List",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      },
+      {
+        "label": "🖥 Equipment Page",
+        "normalize": [],
+        "overall": "SKIP",
+        "trigger": []
+      }
+    ],
+    "steps": [
+      {
+        "message": "identifier mismatch in alarm list",
+        "name": "Verify Alarm List",
+        "status": "FAIL"
+      },
+      {
+        "actual": "HIGH ALRM",
+        "asset_id": "TXT_0001",
+        "asset_name": "TXT_HIGH",
+        "expected": "HIGH ALARM",
+        "is_custom": true,
+        "message": "text not found in region",
+        "name": "Verify HIGH ALARM label",
+        "status": "FAIL"
+      }
+    ],
+    "trigger_info": null
+  }
+]
