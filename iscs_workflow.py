@@ -293,6 +293,20 @@ class Procedure:
         # not dropped — they round-trip and execute via the registry, or surface a
         # clear ERROR at runtime if nothing handles them.
         proc_type = _resolve_proc_type(raw)
+        raw = d.get("proc_type")
+        if not raw:
+            return None                      # malformed entry (no type) — drop
+        # P6.3: unknown keys are KEPT as a dynamic type (a plugin may provide them),
+        # not dropped — they round-trip and execute via the registry, or surface a
+        # clear ERROR at runtime if nothing handles them.
+        proc_type = _resolve_proc_type(raw)
+        raw = d.get("proc_type")
+        if not raw:
+            return None                      # malformed entry (no type) — drop
+        # P6.3: unknown keys are KEPT as a dynamic type (a plugin may provide them),
+        # not dropped — they round-trip and execute via the registry, or surface a
+        # clear ERROR at runtime if nothing handles them.
+        proc_type = _resolve_proc_type(raw)
         try:
             category = ProcedureCategory(d["category"])
         except (ValueError, KeyError):
@@ -671,6 +685,98 @@ def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], d
     return d
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+#  FLOW SCHEMA VERSIONING  (FR-27)
+# ═════════════════════════════════════════════════════════════════════════════
+# Persisted flows carry a schema_version so older/newer saved data can coexist.
+# Bump FLOW_SCHEMA_VERSION when the on-disk shape changes and register a migrator
+# keyed by the version it upgrades FROM. Migrators are applied in sequence until
+# the dict reaches the current version (Chain of Responsibility).
+FLOW_SCHEMA_VERSION = 1
+
+# {from_version: callable(dict) -> dict}. Empty today (v1 is the first version);
+# the mechanism is in place so a future v1→v2 change is a one-line addition.
+_FLOW_MIGRATORS: Dict[int, Callable[[dict], dict]] = {}
+
+
+def register_flow_migrator(from_version: int, fn: Callable[[dict], dict]) -> None:
+    """Register a migrator that upgrades a flow dict FROM `from_version` to the next."""
+    _FLOW_MIGRATORS[from_version] = fn
+
+
+def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], dict]]] = None,
+                       current: int = FLOW_SCHEMA_VERSION) -> dict:
+    """Upgrade a persisted flow dict to the current schema version.
+
+    - Missing schema_version is treated as the current version (legacy data saved
+      before versioning is, by definition, in the current shape).
+    - A version newer than this app supports raises a clear error (don't silently
+      mangle data written by a newer build).
+    """
+    migrators = _FLOW_MIGRATORS if migrators is None else migrators
+    version = d.get("schema_version", current)
+    if not isinstance(version, int):
+        version = current
+    if version > current:
+        raise ValueError(
+            f"Flow schema_version {version} is newer than supported ({current}). "
+            f"Upgrade the application to load this flow."
+        )
+    while version < current:
+        migrator = migrators.get(version)
+        if migrator is None:
+            raise ValueError(f"No migrator registered to upgrade flow schema from v{version}.")
+        d = migrator(d)
+        version += 1
+    return d
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  FLOW SCHEMA VERSIONING  (FR-27)
+# ═════════════════════════════════════════════════════════════════════════════
+# Persisted flows carry a schema_version so older/newer saved data can coexist.
+# Bump FLOW_SCHEMA_VERSION when the on-disk shape changes and register a migrator
+# keyed by the version it upgrades FROM. Migrators are applied in sequence until
+# the dict reaches the current version (Chain of Responsibility).
+FLOW_SCHEMA_VERSION = 1
+
+# {from_version: callable(dict) -> dict}. Empty today (v1 is the first version);
+# the mechanism is in place so a future v1→v2 change is a one-line addition.
+_FLOW_MIGRATORS: Dict[int, Callable[[dict], dict]] = {}
+
+
+def register_flow_migrator(from_version: int, fn: Callable[[dict], dict]) -> None:
+    """Register a migrator that upgrades a flow dict FROM `from_version` to the next."""
+    _FLOW_MIGRATORS[from_version] = fn
+
+
+def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], dict]]] = None,
+                       current: int = FLOW_SCHEMA_VERSION) -> dict:
+    """Upgrade a persisted flow dict to the current schema version.
+
+    - Missing schema_version is treated as the current version (legacy data saved
+      before versioning is, by definition, in the current shape).
+    - A version newer than this app supports raises a clear error (don't silently
+      mangle data written by a newer build).
+    """
+    migrators = _FLOW_MIGRATORS if migrators is None else migrators
+    version = d.get("schema_version", current)
+    if not isinstance(version, int):
+        version = current
+    if version > current:
+        raise ValueError(
+            f"Flow schema_version {version} is newer than supported ({current}). "
+            f"Upgrade the application to load this flow."
+        )
+    while version < current:
+        migrator = migrators.get(version)
+        if migrator is None:
+            raise ValueError(f"No migrator registered to upgrade flow schema from v{version}.")
+        d = migrator(d)
+        version += 1
+    return d
+
+
 class ProcedureFlow:
     """
     Ordered, configurable list of Procedure steps for a scenario.
@@ -803,12 +909,22 @@ class ProcedureFlow:
             "schema_version": FLOW_SCHEMA_VERSION,
             "procedures": [p.to_dict() for p in self.procedures],
         }
+        d = {
+            "schema_version": FLOW_SCHEMA_VERSION,
+            "procedures": [p.to_dict() for p in self.procedures],
+        }
+        d = {
+            "schema_version": FLOW_SCHEMA_VERSION,
+            "procedures": [p.to_dict() for p in self.procedures],
+        }
         if self.io_groups:
             d["io_groups"] = [g.to_dict() for g in self.io_groups]
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProcedureFlow":
+        d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
+        d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
         d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
         d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
         procs  = [Procedure.from_dict(pd) for pd in d.get("procedures", [])]
@@ -1993,6 +2109,68 @@ def _dynamic_catalogue():
     return entries
 
 
+def _dynamic_catalogue():
+    """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
+    capability that opts in via meta.addable=True. Capability params_schema becomes
+    the field set (rendered generically by _rebuild_params' fallback), so a new
+    addable plugin appears in the palette with no edits here.
+
+    Since P6.3 the Procedure model accepts arbitrary string keys (via
+    _DynamicProcType), so an addable plugin with a brand-new key appears here and
+    can be added, saved, loaded, and executed — no enum entry required."""
+    entries = list(_STEP_CATALOGUE)
+    if not _CORE_OK or core_registry is None:
+        return entries
+    have  = {c[1] for c in entries}
+    try:
+        caps = core_registry.list()
+    except Exception:
+        return entries
+    for cap in caps:
+        meta = getattr(cap, "meta", None)
+        key  = getattr(cap, "key", None)
+        if meta is None or not getattr(meta, "addable", False):
+            continue
+        if not key or key in have:           # P6.3: no enum-backed filter — any addable plugin
+            continue
+        entries.append((meta.name, key, meta.category,
+                        dict(getattr(meta, "params_schema", {}) or {}),
+                        getattr(meta, "description", "")))
+        have.add(key)
+    return entries
+
+
+def _dynamic_catalogue():
+    """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
+    capability that opts in via meta.addable=True. Capability params_schema becomes
+    the field set (rendered generically by _rebuild_params' fallback), so a new
+    addable plugin appears in the palette with no edits here.
+
+    Since P6.3 the Procedure model accepts arbitrary string keys (via
+    _DynamicProcType), so an addable plugin with a brand-new key appears here and
+    can be added, saved, loaded, and executed — no enum entry required."""
+    entries = list(_STEP_CATALOGUE)
+    if not _CORE_OK or core_registry is None:
+        return entries
+    have  = {c[1] for c in entries}
+    try:
+        caps = core_registry.list()
+    except Exception:
+        return entries
+    for cap in caps:
+        meta = getattr(cap, "meta", None)
+        key  = getattr(cap, "key", None)
+        if meta is None or not getattr(meta, "addable", False):
+            continue
+        if not key or key in have:           # P6.3: no enum-backed filter — any addable plugin
+            continue
+        entries.append((meta.name, key, meta.category,
+                        dict(getattr(meta, "params_schema", {}) or {}),
+                        getattr(meta, "description", "")))
+        have.add(key)
+    return entries
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  REGION CAPTURE — shared multi-monitor "draw a box on screen" overlay
 # ═════════════════════════════════════════════════════════════════════════════
@@ -2302,6 +2480,8 @@ class AddStepDialog:
         self._is_edit    = edit_step is not None
         self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
         self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
+        self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
+        self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
 
         win = tk.Toplevel(master)
         win.title("Edit Step" if self._is_edit else "Add New Step")
@@ -2318,6 +2498,8 @@ class AddStepDialog:
         # Resolve catalogue entry matching the step being edited (if any)
         edit_entry = None
         if is_edit:
+            edit_entry = next((c for c in self._catalogue
+            edit_entry = next((c for c in self._catalogue
             edit_entry = next((c for c in self._catalogue
             edit_entry = next((c for c in self._catalogue
                                if c[1] == self._edit_step.proc_type.value), None)
@@ -2337,8 +2519,12 @@ class AddStepDialog:
         if self._type_combo_active:
             initial_entry = edit_entry if is_edit else self._catalogue[0]
             initial_entry = edit_entry if is_edit else self._catalogue[0]
+            initial_entry = edit_entry if is_edit else self._catalogue[0]
+            initial_entry = edit_entry if is_edit else self._catalogue[0]
             self._type_var = tk.StringVar(value=initial_entry[0])
             cb = ttk.Combobox(win, textvariable=self._type_var, state="readonly",
+                               values=[c[0] for c in self._catalogue],
+                               values=[c[0] for c in self._catalogue],
                                values=[c[0] for c in self._catalogue],
                                values=[c[0] for c in self._catalogue],
                                font=("Consolas", 10))
@@ -2359,6 +2545,8 @@ class AddStepDialog:
         else:
             desc_text = self._catalogue[0][4]
             desc_text = self._catalogue[0][4]
+            desc_text = self._catalogue[0][4]
+            desc_text = self._catalogue[0][4]
         self._desc_var = tk.StringVar(value=desc_text)
         tk.Label(win, textvariable=self._desc_var, bg="#161616", fg="#555",
                  font=("Consolas", 8), wraplength=460, anchor="w",
@@ -2366,6 +2554,8 @@ class AddStepDialog:
 
         # Name
         tk.Label(win, text="Step Name  (unique in this flow)", **_LBL_STYLE).pack(fill="x", padx=14)
+        name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
+        name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
         name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
         name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
         self._name_var = tk.StringVar(value=name_initial)
@@ -2385,6 +2575,8 @@ class AddStepDialog:
                 params_dict = dict(self._edit_step.params)
             self._rebuild_params(params_dict, tk)
         else:
+            self._rebuild_params(self._catalogue[0][3], tk)
+            self._rebuild_params(self._catalogue[0][3], tk)
             self._rebuild_params(self._catalogue[0][3], tk)
             self._rebuild_params(self._catalogue[0][3], tk)
 
@@ -2563,6 +2755,10 @@ class AddStepDialog:
                      self._catalogue[0])
         entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
                      self._catalogue[0])
+        entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
+                     self._catalogue[0])
+        entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
+                     self._catalogue[0])
         self._desc_var.set(entry[4])
         if not self._is_edit:
             # Only auto-fill the name in Add mode — don't clobber a
@@ -2595,7 +2791,13 @@ class AddStepDialog:
                          self._catalogue[0])
             entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
                          self._catalogue[0])
+            entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
+                         self._catalogue[0])
+            entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
+                         self._catalogue[0])
             _, type_str, cat_str, _, description = entry
+            proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
+            proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
             proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
             proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
             category  = ProcedureCategory(cat_str)
