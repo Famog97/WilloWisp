@@ -129,6 +129,16 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       (non-enum) addable plugin keys — the `example_action` plugin (`addable=True`) now appears.
 - [ ] **P4.2** Rebuild `auto_register_procedures` to query `is_applicable` — low value (auto_register
       works + is tested); Specification pattern only. Deferred / need-driven.
+- [x] **P4.4 (UX) Visual step palette** (live-confirmed; refined) — a "＋ Quick add" toolbar row in the
+      Flow Editor. Palette shows **simple steps only** (category action/utility: Click, Right Click,
+      Hotkey, Type Text, Delay, Screenshot); **verifications stay in the "+ Add" dropdown** (they need
+      configuration). `ProcedureFlowDialog._quick_add` drops the step into the selected IO folder/flow.
+      Demo `example_action` set `addable=False` (hidden from UI; file kept as reference so saved test
+      flows still run). **Click/Right Click from the palette open the coordinate picker immediately**
+      (`_pick_point`) so you grab x/y in one gesture; "Type Text" renamed to **"Text"** in the UI.
+- [x] **P4.5 (UX) Type Text "click first" toggle** (code done, awaiting live confirm) — Type Text just
+      types by default; an opt-in "Click a field first" checkbox (default OFF) enables the x,y click and
+      greys the coord fields when off. Added bool-param (checkbox) support to the step editor. 3 tests.
 - [~] **P4.3** Plugin discovery — **infra DONE:** `iscs_core.discovery` (`discover_directory` /
       `discover_package` / `discover_entry_points`) + ambient `using_registry`; `plugins/` NFR-12
       layout + README + working reference example (`plugins/actions/example_action.py`,
@@ -150,7 +160,10 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - [x] **P5 UI picker** (code done, awaiting live confirm) — 📊 button in the Suite panel opens a dialog
       to generate any template (Management/Engineering/Audit/JSON) from the last run's
       `suite_results.json` (or a chosen file) and opens it. `SuitePanel._open_report_picker`.
-- [ ] **P5 (optional)** PDF renderer + full split of legacy HTML into composable widgets (P5.1).
+- [x] **P5 PDF renderer** — `render_pdf` (via `fpdf2`, a binary `write` template) added as a 5th picker
+      option "Summary PDF". Requires `pip install fpdf2`; without it the picker shows a clear install
+      message. 3 tests (registration always; generation skips if fpdf2 absent).
+- [ ] **P5 (optional)** full split of legacy HTML into composable widgets (P5.1).
 
 ## Phase 6 — Versioning & hardening (started)
 - [x] **P6.1** `schema_version` on persisted **flows** + chained migration mechanism in
@@ -171,20 +184,30 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 
 ---
 
-### Progress
-- Phase 0: **8 / 8** ✅ · coverage gate live
-- Phase 1: **4 / 4** ✅ — registry is the live execution path (legacy adapters + fallback)
-- Phase 2: **events fully emitted** (runner + suite levels). Cutover to subscribers (P2.3b) and DI
-  wiring (P2.1) DEFERRED as run-required — can't verify offline.
-- Phase 3: **B1 + B2 live-confirmed** (DELAY plugin; report-as-subscriber). **B3 code done** (recorder-as-subscriber, awaiting live confirm).
-- Phase 4: **P4.1 registry-extensible palette + P4.3 discovery/startup done** (P4.2 deferred, low value).
-- Phase 6: **P6.1 + P6.1b done** (flow + asset-store schema versioning) — pure-data, offline-safe.
-- Phase 3: **P3.1 + P3.2 done (code)** — **17/19 step types now run from plugins** (all verifications +
-  all input/nav/screenshot actions). Only trigger_alarm/reset_alarm intentionally legacy.
-- Phase 5: **report templates** (Mgmt/Eng/Audit/JSON) + raw-results persisted + **UI picker** (📊 button, awaiting live confirm).
-- Phase 6: **P6.3 enum decoupling done** — arbitrary plugin step keys add/save/load/run (example_noop demo).
-- Total: **204 tests passing**, coverage ~37% (gate 18)
-- Repo: `C:\Repo-Gitlab\willowisp`, branch `1-willowisp-first-issue`
-- Remaining offline-safe work: templates/assets versioning (P6.x), plugin auto-discovery infra.
-- Run-required (deferred): P2.1 DI live wiring, P2.3 cutover, Phase 3 verification/capability ports,
-  Phase 4 UI, Phase 5 reporting cutover.
+### Progress — migration functionally COMPLETE
+
+| Phase | Status |
+|---|---|
+| **0 — Safety net** | ✅ pytest harness (8/8), golden fixtures, coverage gate live |
+| **1 — Registry & contracts** | ✅ capability registry is the live dispatch path (legacy adapters + fallback) |
+| **2 — Wiring & events** | ✅ lifecycle events (runner + suite); report + recorder are event subscribers. *P2.1 DI live-wiring deferred — low value.* |
+| **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions. *trigger_alarm/reset_alarm intentionally legacy (protocol-critical). P3.4 BindingResolver todo.* |
+| **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
+| **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker. *PDF needs `pip install fpdf2`. Widget split (P5.1) optional.* |
+| **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3 — arbitrary plugin step keys add/save/load/run). *P6.2 optional-dep manifest todo.* |
+
+**Total: 207 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `1-willowisp-first-issue`.
+
+### Live-validated at the SCADA rig
+- ✅ **Core path re-validated after the 2026-06-23 repair**: trigger → verify → reset → consolidated report.
+- ✅ Confirmed: DELAY plugin · report-as-subscriber · recorder-as-subscriber · alarm-panel/normalize/
+  **list/event/equipment/custom verifications** · P6.3 arbitrary-step (`example_noop`) · **📊 report UI picker**.
+- ⏳ Not yet separately exercised: nav actions (run a flow that navigates).
+
+### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
+P3.4 `BindingResolver` (TEXT/IMAGE/HYBRID) · report widget split (P5.1) · P4.2 `is_applicable`
+· P6.2 optional-dep manifest · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).
+
+> ⚠️ **2026-06-23 repair note:** accidental edits deleted `iscs_core/container.py` (was untracked) and reverted
+> the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All restored; 204 tests pass; core
+> path re-validated live. **`iscs_core/container.py` must be committed** so it can't be lost again.

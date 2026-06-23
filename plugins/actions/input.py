@@ -112,8 +112,8 @@ class HotkeyAction:
 class TypeTextAction:
     key = "type_text"
     meta = CapabilityMeta(name="Type Text", category="action",
-                          description="Type text (optionally click x,y first).",
-                          params_schema={"text": "", "x": 0, "y": 0,
+                          description="Type text. Optionally click a field first (click_first).",
+                          params_schema={"click_first": False, "text": "", "x": 0, "y": 0,
                                          "wait_after": 0.3, "interval": 0.05})
 
     def execute(self, ctx) -> StepResult:
@@ -125,7 +125,8 @@ class TypeTextAction:
         x, y = int(p.get("x", 0)), int(p.get("y", 0))
         wait = float(p.get("wait_after", 0.3))
         interval = float(p.get("interval", 0.05))
-        if x and y:
+        # Only click a field first when explicitly enabled (default: just type).
+        if p.get("click_first") and x and y:
             pg.click(x, y)
             _sleep(ctx, 0.2)
         pg.typewrite(text, interval=interval)

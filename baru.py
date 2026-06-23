@@ -1935,7 +1935,7 @@ class FailureEvidenceCollector:
         }
 
 class SuiteRunner(threading.Thread):
-    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None):
+    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None):
         super().__init__(daemon=True)
         self.scenarios, self.monitors, self.protocols = scenarios, monitors, protocols
         self.rerun_failed_count = rerun_failed_count  # -1 = till pass, 0 = disabled, N = N times
@@ -1953,6 +1953,9 @@ class SuiteRunner(threading.Thread):
         self._on_rec_stop   = on_rec_stop    # (rec, card_name)
         self._on_rec_update = on_rec_update  # (rec, point_id, equip_desc, attr_desc)
         self._active_rec    = None           # currently running Recorder (or None)
+        # Lifecycle event bus (FR-28). Additive: events are published alongside the
+        # existing recorder callbacks / report call; nothing depends on a subscriber.
+        self.event_bus = event_bus if event_bus is not None else CORE_BUS
 
     def _emit(self, event):
         """Publish a lifecycle event if a bus + event class are present. Never
@@ -5808,10 +5811,11 @@ class CoordinatePickOverlay(tk.Toplevel):
     A full-screen transparent overlay that captures exactly ONE left-click,
     returns the coordinates, and automatically dismisses itself.
     """
-    def __init__(self, master, monitor, on_picked):
+    def __init__(self, master, monitor, on_picked, on_cancel=None):
         super().__init__(master)
         self.monitor = monitor
         self.on_picked = on_picked
+        self.on_cancel = on_cancel   # called on Esc so callers can restore their window
 
         # Cover the entire selected monitor
         self.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
@@ -5842,7 +5846,13 @@ class CoordinatePickOverlay(tk.Toplevel):
         self.destroy()
 
     def _on_cancel(self):
+        cb = self.on_cancel
         self.destroy()
+        if callable(cb):
+            try:
+                cb()
+            except Exception:
+                pass
 
 
 # ── Suite Card Config Dialog ───────────────────────────────────────────────────
@@ -6272,7 +6282,13 @@ class SuiteCardConfigDialog(tk.Toplevel):
         def on_picked(x, y):
             self.after(0, lambda: self._apply_picked_coord((x, y)))
 
-        CoordinatePickOverlay(self, mon, on_picked)
+        def on_cancel():
+            try:
+                self.deiconify(); self.lift()
+            except Exception:
+                pass
+
+        CoordinatePickOverlay(self, mon, on_picked, on_cancel)
 
     def _apply_picked_coord(self, xy):
         x, y = int(xy[0]), int(xy[1])

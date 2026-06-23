@@ -169,6 +169,64 @@ def render_json(records: List[dict], meta: Dict[str, Any]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
 
 
+def _pdf_text(s: Any) -> str:
+    """fpdf2's core fonts are latin-1 only — make any text safe (drop emoji/unicode)."""
+    return str(s if s is not None else "").encode("latin-1", "replace").decode("latin-1")
+
+
+def render_pdf(records: List[dict], meta: Dict[str, Any], path) -> None:
+    """Write a summary PDF (FR-30f). Requires the pure-Python 'fpdf2' package:
+    `pip install fpdf2`. Unlike the HTML/JSON templates this writes the file
+    directly (PDF is binary), so it's registered with a 'write' hook."""
+    try:
+        from fpdf import FPDF
+    except Exception:
+        raise RuntimeError("PDF export requires the 'fpdf2' package — install it with: "
+                           "pip install fpdf2")
+    s = _summary(records)
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, _pdf_text(f"{meta.get('title','Test Run')} - Summary"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, _pdf_text(f"Generated {meta.get('generated')}   {meta.get('range','')}"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(0, 7, _pdf_text(
+        f"Points: {s['total']}    Passed: {s['passed']}    Failed: {s['failed']}    "
+        f"Pass rate: {s['pass_rate']:.1f}%"), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 7, "Failures by category", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    if s["categories"]:
+        for cat, n in s["categories"].most_common():
+            pdf.cell(0, 6, _pdf_text(f"   {cat}: {n}"), new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.cell(0, 6, "   None", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 7, "Failed points", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    fails = [r for r in records if r.get("overall") == "FAIL"]
+    if fails:
+        for r in fails:
+            pdf.multi_cell(0, 5, _pdf_text(
+                f"{r.get('id')}  [{r.get('scenario_name')}]  "
+                f"{r.get('failure_category')}: {r.get('failure_reason')}"))
+    else:
+        pdf.cell(0, 6, "   None", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.output(str(path))
+
+
 # ── registry (FR-30, FR-30b) ──────────────────────────────────────────────────
 
 TEMPLATES: Dict[str, Dict[str, Any]] = {
@@ -180,6 +238,8 @@ TEMPLATES: Dict[str, Dict[str, Any]] = {
                     "filename": "Audit_Report.html", "render": render_audit},
     "json":        {"name": "Results JSON", "audience": "data",
                     "filename": "Results.json", "render": render_json},
+    "pdf":         {"name": "Summary PDF", "audience": "print",
+                    "filename": "Summary_Report.pdf", "write": render_pdf},
 }
 
 
@@ -194,6 +254,9 @@ def render_html(template_key: str, raw_results: List[dict],
     if template_key not in TEMPLATES:
         raise KeyError(f"Unknown report template {template_key!r}. "
                        f"Available: {sorted(TEMPLATES)}")
+    if "render" not in TEMPLATES[template_key]:
+        raise ValueError(f"Template {template_key!r} is a binary format — "
+                         f"use generate_template_report() to write it.")
     records = _normalize(raw_results)
     meta = {
         "title": title,
@@ -205,11 +268,24 @@ def render_html(template_key: str, raw_results: List[dict],
 
 def generate_template_report(template_key: str, raw_results: List[dict], output_dir,
                              title: str = "Test Run", start=None, end=None) -> Path:
-    """Render and write the chosen template into output_dir. Returns the path."""
+    """Render and write the chosen template into output_dir. Returns the path.
+    Handles both text templates ('render' → str) and binary ones ('write' → file)."""
+    if template_key not in TEMPLATES:
+        raise KeyError(f"Unknown report template {template_key!r}. Available: {sorted(TEMPLATES)}")
+    entry = TEMPLATES[template_key]
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    path = out / TEMPLATES[template_key]["filename"]
-    path.write_text(render_html(template_key, raw_results, title, start, end), encoding="utf-8")
+    path = out / entry["filename"]
+    if "write" in entry:
+        records = _normalize(raw_results)
+        meta = {
+            "title": title,
+            "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "range": f"{start} → {end}" if (start or end) else "",
+        }
+        entry["write"](records, meta, path)
+    else:
+        path.write_text(render_html(template_key, raw_results, title, start, end), encoding="utf-8")
     return path
 
 

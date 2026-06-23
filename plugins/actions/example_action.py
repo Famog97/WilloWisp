@@ -20,7 +20,7 @@ class ExampleNoOpAction:
         description="Reference plugin (key not in ProcedureType). Demonstrates P6.3: "
                     "a brand-new step type that's addable, saves/loads, and runs via the registry.",
         params_schema={"message": ""},
-        addable=True,     # appears in the Add-Step palette (proves arbitrary plugin keys work)
+        addable=False,    # hidden from the UI (demo plugin). Set True to show the P6.3 demo again.
     )
 
     def execute(self, ctx) -> StepResult:

@@ -18,7 +18,7 @@ RAW = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 def test_template_registry_lists_audiences():
     keys = {t["key"] for t in rt.list_templates()}
-    assert {"management", "engineering", "audit", "json"} <= keys
+    assert {"management", "engineering", "audit", "json", "pdf"} <= keys
 
 
 def test_engineering_renders_full_step_traces():
@@ -74,12 +74,29 @@ def test_audit_lists_every_attempt():
 def test_picker_core_generates_every_template(tmp_path):
     # Mirrors what the UI report picker's Generate button does: read a saved
     # suite_results.json and generate the chosen template to a file.
+    import importlib.util
+    have_fpdf = importlib.util.find_spec("fpdf") is not None
     src = tmp_path / "suite_results.json"
     src.write_text(json.dumps(RAW), encoding="utf-8")
     raw = json.loads(src.read_text(encoding="utf-8"))
     for key in [t["key"] for t in rt.list_templates()]:
+        if key == "pdf" and not have_fpdf:
+            continue   # PDF needs fpdf2; the picker surfaces a clear install message
         out = rt.generate_template_report(key, raw, src.parent, title="T")
         assert out.exists(), key
+
+
+def test_pdf_generates_when_fpdf_available(tmp_path):
+    pytest.importorskip("fpdf", reason="PDF export needs fpdf2 (pip install fpdf2)")
+    out = rt.generate_template_report("pdf", RAW, tmp_path, title="PDF Run")
+    assert out.exists() and out.suffix == ".pdf"
+    assert out.read_bytes()[:4] == b"%PDF"
+
+
+def test_pdf_render_html_rejected_as_binary():
+    # render_html is for text templates; PDF must go through generate_template_report.
+    with pytest.raises(ValueError):
+        rt.render_html("pdf", RAW)
 
 
 def test_generate_writes_file(tmp_path):

@@ -86,6 +86,20 @@ def test_type_text_types(reg, pg):
     assert ("typewrite", "hello") in pg.calls
 
 
+def test_type_text_does_not_click_by_default(reg, pg):
+    # x/y provided but click_first OFF (default) → just types, no click.
+    reg.get("type_text").execute(_ctx({"text": "hi", "x": 5, "y": 6, "wait_after": 0}))
+    assert not any(c[0] == "click" for c in pg.calls)
+    assert ("typewrite", "hi") in pg.calls
+
+
+def test_type_text_clicks_first_when_enabled(reg, pg):
+    reg.get("type_text").execute(
+        _ctx({"click_first": True, "text": "hi", "x": 5, "y": 6, "wait_after": 0}))
+    assert ("click", 5, 6) in pg.calls
+    assert ("typewrite", "hi") in pg.calls
+
+
 # ── navigate ──────────────────────────────────────────────────────────────────
 
 def test_navigate_alarm_list_clicks_home_then_target(reg, pg):

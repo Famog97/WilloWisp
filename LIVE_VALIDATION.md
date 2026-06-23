@@ -133,6 +133,17 @@ Order is chosen so the smallest, safest cutover proves the pattern first.
    - [ ] Try each template; the legacy `Suite_Report.html` is still produced as before (unchanged)
    - [ ] With no run yet, 📊 lets you browse for a `suite_results.json` (or says to run a suite first)
 
+9. **B9 — Visual step palette + Type Text toggle (UX, P4.4/P4.5).** ✅ CODE DONE — validate now.
+   - [ ] Open a card's Flow editor (⚡) → a **"＋ Quick add"** row of colour-coded buttons appears
+         (Click, Delay, Type Text, Verify…, etc.)
+   - [ ] Select an IO folder, click e.g. **"Delay"** → a Delay step is added to that folder (unique name)
+   - [ ] Add **"Type Text"** → in its editor, **"Click a field first" is OFF by default** and the x/y
+         fields are greyed out → it just types
+   - [ ] Tick **"Click a field first"** → x/y become editable (+ Pick) → it clicks then types
+   - [ ] Run a flow: `Click here` then a plain `Type Text` (no own click) behaves as expected
+
+10. **B10 — PDF report (needs `pip install fpdf2`).** After installing, generate "Summary PDF" from the 📊 picker.
+
 > After each B-step: run a suite, confirm the checklist item, and commit. If a step
 > misbehaves, revert that step (`git checkout -- <files>`) and report — nothing else
 > is affected because they're done one at a time.

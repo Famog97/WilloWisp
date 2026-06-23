@@ -199,34 +199,106 @@ _LEGACY_METHOD_MAP: Dict["ProcedureType", str] = {
 }
 
 
-class _DynamicProcType:
-    """A ProcedureType-like wrapper for plugin step keys not in the enum. Quacks
-    like an enum member: exposes .value and .name, compares + hashes by value, so
-    all existing `proc_type.value` / `== ProcedureType.X` code keeps working."""
-    __slots__ = ("value", "name")
-
-    def __init__(self, key):
-        self.value = str(key)
-        self.name  = str(key).upper()
-
-    def __eq__(self, other):
-        return getattr(other, "value", _PROC_TYPE_SENTINEL) == self.value
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"<DynamicProcType {self.value!r}>"
+def _category_for(proc_type: "ProcedureType") -> str:
+    """Classify a ProcedureType into a capability category."""
+    v = proc_type.value
+    if v.startswith("verify"):
+        return "verification"
+    if v in ("delay", "screenshot"):
+        return "utility"
+    return "action"
 
 
-def _resolve_proc_type(key):
-    """Return the ProcedureType for a known key, else a _DynamicProcType (P6.3)."""
-    if isinstance(key, (ProcedureType, _DynamicProcType)):
-        return key
-    try:
-        return ProcedureType(key)
-    except ValueError:
-        return _DynamicProcType(str(key))
+try:
+    from iscs_core import (
+        CapabilityMeta, CapabilityRegistry, StepResult, StepStatus,
+        registry as core_registry,
+        bus as core_bus,
+        StepStarted, StepCompleted, VerificationPassed, VerificationFailed,
+        IOPointStarted, IOPointCompleted,
+    )
+    _CORE_OK = True
+except Exception as _core_err:   # pragma: no cover - exercised only when core absent
+    CapabilityMeta = CapabilityRegistry = StepResult = StepStatus = None
+    core_registry = None
+    core_bus = None
+    StepStarted = StepCompleted = VerificationPassed = VerificationFailed = None
+    IOPointStarted = IOPointCompleted = None
+    _CORE_OK = False
+    logger.info("iscs_workflow: iscs_core unavailable — capability bridge disabled (%s)", _core_err)
+
+
+def _noop_log(_msg: str) -> None:
+    pass
+
+
+if _CORE_OK:
+
+    @dataclass
+    class LegacyExecContext:
+        """Carries the collaborators a legacy ``_exec_*`` needs, so a stateless
+        capability adapter can invoke it. Bridges the old executor signature
+        ``(proc, exec_ctx, sampler_ok, log)`` to the uniform ``execute(ctx)``."""
+        runner: Any
+        proc: "Procedure"
+        exec: "ExecContext"
+        sampler_ok: bool = False
+        log: Callable[[str], None] = _noop_log
+
+    def _to_step_status(status: Any) -> "StepStatus":
+        # Map by NAME, not value: ProcedureStatus.ERROR == "error" (lowercase)
+        # but StepStatus.ERROR == "ERROR". Names match (PASS/FAIL/SKIP/ERROR).
+        name = getattr(status, "name", str(status)).upper()
+        try:
+            return StepStatus[name]
+        except KeyError:
+            return StepStatus.ERROR
+
+    class LegacyCapabilityAdapter:
+        """Wraps one ``ProcedureRunner._exec_*`` method as a Capability keyed by
+        the ProcedureType value. Behavior-preserving: ``execute`` forwards to the
+        existing executor and normalizes its ``(status, verify_results,
+        screenshot)`` return into a ``StepResult``."""
+
+        def __init__(self, proc_type: "ProcedureType", method_name: str):
+            self.proc_type   = proc_type
+            self.key         = proc_type.value
+            self.method_name = method_name
+            self.meta = CapabilityMeta(
+                name        = proc_type.name.replace("_", " ").title(),
+                category    = _category_for(proc_type),
+                description = f"Legacy adapter for {proc_type.value}",
+            )
+
+        def execute(self, ctx: "LegacyExecContext") -> "StepResult":
+            fn = getattr(ctx.runner, self.method_name)
+            status, verify_results, screenshot = fn(ctx.proc, ctx.exec, ctx.sampler_ok, ctx.log)
+            return StepResult(
+                status     = _to_step_status(status),
+                screenshot = screenshot or "",
+                data       = {"verify_results": verify_results},
+            )
+
+    def register_legacy_capabilities(into: "Optional[CapabilityRegistry]" = None,
+                                     *, override: bool = False) -> "CapabilityRegistry":
+        """Register a LegacyCapabilityAdapter for every ProcedureType.
+        Idempotent: existing keys are skipped unless ``override=True``."""
+        target = into if into is not None else core_registry
+        for proc_type, method_name in _LEGACY_METHOD_MAP.items():
+            if target.has(proc_type.value) and not override:
+                continue
+            target.register(LegacyCapabilityAdapter(proc_type, method_name), override=override)
+        return target
+
+    # Auto-register into the global core registry at import time (FR-3 style).
+    register_legacy_capabilities()
+
+else:   # pragma: no cover - exercised only when core absent
+    LegacyExecContext = None
+    LegacyCapabilityAdapter = None
+
+    def register_legacy_capabilities(into=None, *, override: bool = False):
+        return None
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -592,99 +664,6 @@ def _next_step_id() -> str:
     _step_id_counter += 1
     return f"STP_{_step_id_counter:04d}"
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-#  FLOW SCHEMA VERSIONING  (FR-27)
-# ═════════════════════════════════════════════════════════════════════════════
-# Persisted flows carry a schema_version so older/newer saved data can coexist.
-# Bump FLOW_SCHEMA_VERSION when the on-disk shape changes and register a migrator
-# keyed by the version it upgrades FROM. Migrators are applied in sequence until
-# the dict reaches the current version (Chain of Responsibility).
-FLOW_SCHEMA_VERSION = 1
-
-# {from_version: callable(dict) -> dict}. Empty today (v1 is the first version);
-# the mechanism is in place so a future v1→v2 change is a one-line addition.
-_FLOW_MIGRATORS: Dict[int, Callable[[dict], dict]] = {}
-
-
-def register_flow_migrator(from_version: int, fn: Callable[[dict], dict]) -> None:
-    """Register a migrator that upgrades a flow dict FROM `from_version` to the next."""
-    _FLOW_MIGRATORS[from_version] = fn
-
-
-def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], dict]]] = None,
-                       current: int = FLOW_SCHEMA_VERSION) -> dict:
-    """Upgrade a persisted flow dict to the current schema version.
-
-    - Missing schema_version is treated as the current version (legacy data saved
-      before versioning is, by definition, in the current shape).
-    - A version newer than this app supports raises a clear error (don't silently
-      mangle data written by a newer build).
-    """
-    migrators = _FLOW_MIGRATORS if migrators is None else migrators
-    version = d.get("schema_version", current)
-    if not isinstance(version, int):
-        version = current
-    if version > current:
-        raise ValueError(
-            f"Flow schema_version {version} is newer than supported ({current}). "
-            f"Upgrade the application to load this flow."
-        )
-    while version < current:
-        migrator = migrators.get(version)
-        if migrator is None:
-            raise ValueError(f"No migrator registered to upgrade flow schema from v{version}.")
-        d = migrator(d)
-        version += 1
-    return d
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-#  FLOW SCHEMA VERSIONING  (FR-27)
-# ═════════════════════════════════════════════════════════════════════════════
-# Persisted flows carry a schema_version so older/newer saved data can coexist.
-# Bump FLOW_SCHEMA_VERSION when the on-disk shape changes and register a migrator
-# keyed by the version it upgrades FROM. Migrators are applied in sequence until
-# the dict reaches the current version (Chain of Responsibility).
-FLOW_SCHEMA_VERSION = 1
-
-# {from_version: callable(dict) -> dict}. Empty today (v1 is the first version);
-# the mechanism is in place so a future v1→v2 change is a one-line addition.
-_FLOW_MIGRATORS: Dict[int, Callable[[dict], dict]] = {}
-
-
-def register_flow_migrator(from_version: int, fn: Callable[[dict], dict]) -> None:
-    """Register a migrator that upgrades a flow dict FROM `from_version` to the next."""
-    _FLOW_MIGRATORS[from_version] = fn
-
-
-def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], dict]]] = None,
-                       current: int = FLOW_SCHEMA_VERSION) -> dict:
-    """Upgrade a persisted flow dict to the current schema version.
-
-    - Missing schema_version is treated as the current version (legacy data saved
-      before versioning is, by definition, in the current shape).
-    - A version newer than this app supports raises a clear error (don't silently
-      mangle data written by a newer build).
-    """
-    migrators = _FLOW_MIGRATORS if migrators is None else migrators
-    version = d.get("schema_version", current)
-    if not isinstance(version, int):
-        version = current
-    if version > current:
-        raise ValueError(
-            f"Flow schema_version {version} is newer than supported ({current}). "
-            f"Upgrade the application to load this flow."
-        )
-    while version < current:
-        migrator = migrators.get(version)
-        if migrator is None:
-            raise ValueError(f"No migrator registered to upgrade flow schema from v{version}.")
-        d = migrator(d)
-        version += 1
-    return d
-
-
 # ═════════════════════════════════════════════════════════════════════════════
 #  FLOW SCHEMA VERSIONING  (FR-27)
 # ═════════════════════════════════════════════════════════════════════════════
@@ -905,27 +884,12 @@ class ProcedureFlow:
             "schema_version": FLOW_SCHEMA_VERSION,
             "procedures": [p.to_dict() for p in self.procedures],
         }
-        d = {
-            "schema_version": FLOW_SCHEMA_VERSION,
-            "procedures": [p.to_dict() for p in self.procedures],
-        }
-        d = {
-            "schema_version": FLOW_SCHEMA_VERSION,
-            "procedures": [p.to_dict() for p in self.procedures],
-        }
-        d = {
-            "schema_version": FLOW_SCHEMA_VERSION,
-            "procedures": [p.to_dict() for p in self.procedures],
-        }
         if self.io_groups:
             d["io_groups"] = [g.to_dict() for g in self.io_groups]
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProcedureFlow":
-        d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
-        d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
-        d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
         d = _migrate_flow_dict(d)                      # upgrade older saved data first (FR-27)
         procs  = [Procedure.from_dict(pd) for pd in d.get("procedures", [])]
         groups = [IOGroup.from_dict(gd)   for gd in d.get("io_groups",  [])]
@@ -1233,6 +1197,7 @@ class ProcedureRunner:
         on_log       : Callable[[str], None],
         stop_event   : threading.Event,
         pause_event  : threading.Event,
+        event_bus    : Any = None,
     ):
         self.flow         = flow
         self.verifier     = verifier
@@ -1241,6 +1206,20 @@ class ProcedureRunner:
         self.on_log       = on_log
         self._stop        = stop_event
         self._pause       = pause_event
+        # Lifecycle event bus (FR-28). Defaults to the shared core bus; pass an
+        # explicit bus to isolate, or None to disable emission entirely. Optional
+        # so existing callers (positional args) keep working unchanged.
+        self.event_bus    = event_bus if event_bus is not None else core_bus
+
+    def _emit(self, event: Any) -> None:
+        """Publish a lifecycle event if a bus is present. Never raises — delivery
+        is isolated inside EventBus.publish (a bad subscriber can't break a run)."""
+        bus = getattr(self, "event_bus", None)
+        if bus is not None and event is not None:
+            try:
+                bus.publish(event)
+            except Exception:   # pragma: no cover - defensive belt-and-braces
+                logger.exception("event publish failed for %s", type(event).__name__)
 
     # ── Public entry point ───────────────────────────────────────────────────
 
@@ -1509,33 +1488,34 @@ class ProcedureRunner:
             logs.append(msg)
             self.on_log(f"  [{proc.name}] {msg}")
 
-        try:
-            dispatch = {
-                ProcedureType.TRIGGER_ALARM       : self._exec_trigger_alarm,
-                ProcedureType.RESET_ALARM         : self._exec_reset_alarm,
-                ProcedureType.NAVIGATE_HOME       : self._exec_navigate_home,
-                ProcedureType.NAVIGATE_ALARM_LIST : self._exec_navigate_alarm_list,
-                ProcedureType.NAVIGATE_EVENT_LIST : self._exec_navigate_event_list,
-                ProcedureType.NAVIGATE_EQUIP_PAGE : self._exec_navigate_equip_page,
-                ProcedureType.VERIFY_ALARM_PANEL  : self._exec_verify_alarm_panel,
-                ProcedureType.VERIFY_NORMALIZE    : self._exec_verify_normalize,
-                ProcedureType.VERIFY_ALARM_LIST   : self._exec_verify_alarm_list,
-                ProcedureType.VERIFY_EVENT_LIST   : self._exec_verify_event_list,
-                ProcedureType.VERIFY_EQUIP_PAGE   : self._exec_verify_equip_page,
-                ProcedureType.DELAY               : self._exec_delay,
-                ProcedureType.SCREENSHOT          : self._exec_screenshot,
-                ProcedureType.CLICK               : self._exec_click,
-                ProcedureType.RIGHT_CLICK         : self._exec_right_click,
-                ProcedureType.HOTKEY              : self._exec_hotkey,
-                ProcedureType.TYPE_TEXT           : self._exec_type_text,
-                ProcedureType.VERIFY_ALARM_PANEL_CUSTOM: self._exec_verify_alarm_panel_custom,
-                ProcedureType.VERIFY_CUSTOM             : self._exec_verify_custom,
-            }
-            fn = dispatch.get(proc.proc_type)
-            if fn is None:
-                raise NotImplementedError(f"No executor for {proc.proc_type}")
+        if _CORE_OK:
+            self._emit(StepStarted(step_key=proc.proc_type.value, step_name=proc.name))
 
-            status, verify_results, screenshot = fn(proc, ctx, sampler_ok, log)
+        try:
+            # ── Capability registry path (P1.3) ─────────────────────────────────
+            # Resolve the capability for this step's key from the registry and run
+            # it through the uniform execute(ctx) contract. Falls back to the direct
+            # legacy method when the registry is unavailable or the key is unregistered.
+            cap = None
+            if core_registry is not None:
+                try:
+                    cap = core_registry.get(proc.proc_type.value)
+                except Exception:
+                    cap = None
+
+            if cap is not None:
+                exec_ctx    = LegacyExecContext(runner=self, proc=proc, exec=ctx,
+                                                sampler_ok=sampler_ok, log=log)
+                step_result = cap.execute(exec_ctx)
+                status         = ProcedureStatus[step_result.status.name]
+                verify_results = step_result.data.get("verify_results", [])
+                screenshot     = step_result.screenshot
+            else:
+                method_name = _LEGACY_METHOD_MAP.get(proc.proc_type)
+                fn = getattr(self, method_name) if method_name else None
+                if fn is None:
+                    raise NotImplementedError(f"No executor for {proc.proc_type}")
+                status, verify_results, screenshot = fn(proc, ctx, sampler_ok, log)
 
         except Exception as exc:
             status         = ProcedureStatus.ERROR
@@ -1549,6 +1529,19 @@ class ProcedureRunner:
 
         t1  = datetime.datetime.now()
         dur = (t1 - t0).total_seconds() * 1000
+
+        if _CORE_OK:
+            status_name = getattr(status, "name", str(status)).upper()
+            self._emit(StepCompleted(step_key=proc.proc_type.value, step_name=proc.name,
+                                     status=status_name, duration_ms=dur))
+            if _category_for(proc.proc_type) == "verification":
+                if status_name == "PASS":
+                    self._emit(VerificationPassed(step_key=proc.proc_type.value,
+                                                  step_name=proc.name))
+                elif status_name in ("FAIL", "ERROR"):
+                    self._emit(VerificationFailed(step_key=proc.proc_type.value,
+                                                  step_name=proc.name,
+                                                  message=error_detail or ""))
 
         return ProcedureResult(
             procedure_name  = proc.name,
@@ -2009,9 +2002,9 @@ _STEP_CATALOGUE = [
     ("Hotkey", "hotkey", "action",
      {"keys": "ctrl+f5", "wait_after": 0.5},
      "Press a keyboard shortcut, e.g. ctrl+f5, alt+f4, enter, escape."),
-    ("Type Text", "type_text", "action",
-     {"text": "", "x": 0, "y": 0, "wait_after": 0.3, "interval": 0.05},
-     "Type text. Set x/y to click a field first (0 = skip click)."),
+    ("Text", "type_text", "action",
+     {"click_first": False, "text": "", "x": 0, "y": 0, "wait_after": 0.3, "interval": 0.05},
+     "Type text. By default it just types; tick 'Click a field first' to click x/y before typing."),
     ("Verify Alarm Panel (standalone)", "verify_alarm_panel_custom", "verification",
      {"file_suffix": "alarm_panel_custom"},
      "Re-check alarm panel anywhere in the flow, independent of Trigger Alarm."),
@@ -2033,6 +2026,7 @@ _PARAM_META = {
     "delay_sec":   ("float", "Delay (sec)"),
     "keys":        ("str",   "Keys (e.g. ctrl+f5)"),
     "text":        ("str",   "Text to type"),
+    "click_first": ("bool",  "Click a field first"),
     "interval":    ("float", "Typing interval (sec)"),
     "file_suffix": ("str",   "File suffix"),
     "clicks":      ("json",  "Clicks (JSON list)"),
@@ -2044,9 +2038,14 @@ _PARAM_META = {
 
 _ENT_STYLE = dict(bg="#181818", fg="#eee", font=("Consolas", 10),
                   insertbackground="#eee", relief="flat", bd=6)
+# Accent style for the "text to type" field — distinct background + green border
+# so it's obvious which cell is the text you'll type (vs the step name).
+_ENT_STYLE_TEXT = dict(bg="#13241a", fg="#d8ffe6", font=("Consolas", 10),
+                       insertbackground="#69ff9a", relief="flat", bd=6,
+                       highlightthickness=1, highlightbackground="#2f7a4f",
+                       highlightcolor="#69ff9a")
 _LBL_STYLE = dict(bg="#0f0f0f", fg="#aaa", font=("Consolas", 9), anchor="w")
 
-
 def _dynamic_catalogue():
     """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
     capability that opts in via meta.addable=True. Capability params_schema becomes
@@ -2076,100 +2075,6 @@ def _dynamic_catalogue():
                         getattr(meta, "description", "")))
         have.add(key)
     return entries
-
-
-def _dynamic_catalogue():
-    """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
-    capability that opts in via meta.addable=True. Capability params_schema becomes
-    the field set (rendered generically by _rebuild_params' fallback), so a new
-    addable plugin appears in the palette with no edits here.
-
-    Since P6.3 the Procedure model accepts arbitrary string keys (via
-    _DynamicProcType), so an addable plugin with a brand-new key appears here and
-    can be added, saved, loaded, and executed — no enum entry required."""
-    entries = list(_STEP_CATALOGUE)
-    if not _CORE_OK or core_registry is None:
-        return entries
-    have  = {c[1] for c in entries}
-    try:
-        caps = core_registry.list()
-    except Exception:
-        return entries
-    for cap in caps:
-        meta = getattr(cap, "meta", None)
-        key  = getattr(cap, "key", None)
-        if meta is None or not getattr(meta, "addable", False):
-            continue
-        if not key or key in have:           # P6.3: no enum-backed filter — any addable plugin
-            continue
-        entries.append((meta.name, key, meta.category,
-                        dict(getattr(meta, "params_schema", {}) or {}),
-                        getattr(meta, "description", "")))
-        have.add(key)
-    return entries
-
-
-def _dynamic_catalogue():
-    """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
-    capability that opts in via meta.addable=True. Capability params_schema becomes
-    the field set (rendered generically by _rebuild_params' fallback), so a new
-    addable plugin appears in the palette with no edits here.
-
-    Since P6.3 the Procedure model accepts arbitrary string keys (via
-    _DynamicProcType), so an addable plugin with a brand-new key appears here and
-    can be added, saved, loaded, and executed — no enum entry required."""
-    entries = list(_STEP_CATALOGUE)
-    if not _CORE_OK or core_registry is None:
-        return entries
-    have  = {c[1] for c in entries}
-    try:
-        caps = core_registry.list()
-    except Exception:
-        return entries
-    for cap in caps:
-        meta = getattr(cap, "meta", None)
-        key  = getattr(cap, "key", None)
-        if meta is None or not getattr(meta, "addable", False):
-            continue
-        if not key or key in have:           # P6.3: no enum-backed filter — any addable plugin
-            continue
-        entries.append((meta.name, key, meta.category,
-                        dict(getattr(meta, "params_schema", {}) or {}),
-                        getattr(meta, "description", "")))
-        have.add(key)
-    return entries
-
-
-def _dynamic_catalogue():
-    """The Add-Step palette (P4.1): the curated _STEP_CATALOGUE plus any registered
-    capability that opts in via meta.addable=True. Capability params_schema becomes
-    the field set (rendered generically by _rebuild_params' fallback), so a new
-    addable plugin appears in the palette with no edits here.
-
-    Since P6.3 the Procedure model accepts arbitrary string keys (via
-    _DynamicProcType), so an addable plugin with a brand-new key appears here and
-    can be added, saved, loaded, and executed — no enum entry required."""
-    entries = list(_STEP_CATALOGUE)
-    if not _CORE_OK or core_registry is None:
-        return entries
-    have  = {c[1] for c in entries}
-    try:
-        caps = core_registry.list()
-    except Exception:
-        return entries
-    for cap in caps:
-        meta = getattr(cap, "meta", None)
-        key  = getattr(cap, "key", None)
-        if meta is None or not getattr(meta, "addable", False):
-            continue
-        if not key or key in have:           # P6.3: no enum-backed filter — any addable plugin
-            continue
-        entries.append((meta.name, key, meta.category,
-                        dict(getattr(meta, "params_schema", {}) or {}),
-                        getattr(meta, "description", "")))
-        have.add(key)
-    return entries
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  REGION CAPTURE — shared multi-monitor "draw a box on screen" overlay
@@ -2480,10 +2385,6 @@ class AddStepDialog:
         self._is_edit    = edit_step is not None
         self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
         self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
-        self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
-        self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
-        self._catalogue  = _dynamic_catalogue()    # P4.1: registry-extensible palette
-
         win = tk.Toplevel(master)
         win.title("Edit Step" if self._is_edit else "Add New Step")
         win.configure(bg="#0f0f0f")
@@ -2493,16 +2394,20 @@ class AddStepDialog:
         win.grab_set()
         self.win = win
         self._build(win, tk, ttk)
+        # If this step has a "text to type" field, focus it so you can type right
+        # away (used by the palette's quick-add Text button).
+        te = getattr(self, "_text_entry", None)
+        if te is not None:
+            try:
+                win.after(80, lambda e=te: (e.focus_set(), e.icursor("end")))
+            except Exception:
+                pass
 
     def _build(self, win, tk, ttk):
         is_edit = self._is_edit
         # Resolve catalogue entry matching the step being edited (if any)
         edit_entry = None
         if is_edit:
-            edit_entry = next((c for c in self._catalogue
-            edit_entry = next((c for c in self._catalogue
-            edit_entry = next((c for c in self._catalogue
-            edit_entry = next((c for c in self._catalogue
             edit_entry = next((c for c in self._catalogue
                                if c[1] == self._edit_step.proc_type.value), None)
         self._type_combo_active = (not is_edit) or (edit_entry is not None)
@@ -2520,16 +2425,8 @@ class AddStepDialog:
         tk.Label(win, text="Step Type", **_LBL_STYLE).pack(fill="x", padx=14)
         if self._type_combo_active:
             initial_entry = edit_entry if is_edit else self._catalogue[0]
-            initial_entry = edit_entry if is_edit else self._catalogue[0]
-            initial_entry = edit_entry if is_edit else self._catalogue[0]
-            initial_entry = edit_entry if is_edit else self._catalogue[0]
-            initial_entry = edit_entry if is_edit else self._catalogue[0]
             self._type_var = tk.StringVar(value=initial_entry[0])
             cb = ttk.Combobox(win, textvariable=self._type_var, state="readonly",
-                               values=[c[0] for c in self._catalogue],
-                               values=[c[0] for c in self._catalogue],
-                               values=[c[0] for c in self._catalogue],
-                               values=[c[0] for c in self._catalogue],
                                values=[c[0] for c in self._catalogue],
                                font=("Consolas", 10))
             cb.pack(fill="x", padx=14, pady=(0, 4))
@@ -2548,9 +2445,6 @@ class AddStepDialog:
                     "(This step's type is set automatically and can't be changed here.)"
         else:
             desc_text = self._catalogue[0][4]
-            desc_text = self._catalogue[0][4]
-            desc_text = self._catalogue[0][4]
-            desc_text = self._catalogue[0][4]
         self._desc_var = tk.StringVar(value=desc_text)
         tk.Label(win, textvariable=self._desc_var, bg="#161616", fg="#555",
                  font=("Consolas", 8), wraplength=460, anchor="w",
@@ -2558,9 +2452,6 @@ class AddStepDialog:
 
         # Name
         tk.Label(win, text="Step Name  (unique in this flow)", **_LBL_STYLE).pack(fill="x", padx=14)
-        name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
-        name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
-        name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
         name_initial = self._edit_step.name if is_edit else self._catalogue[0][0]
         self._name_var = tk.StringVar(value=name_initial)
         tk.Entry(win, textvariable=self._name_var, **_ENT_STYLE).pack(
@@ -2580,15 +2471,14 @@ class AddStepDialog:
             self._rebuild_params(params_dict, tk)
         else:
             self._rebuild_params(self._catalogue[0][3], tk)
-            self._rebuild_params(self._catalogue[0][3], tk)
-            self._rebuild_params(self._catalogue[0][3], tk)
-            self._rebuild_params(self._catalogue[0][3], tk)
-
         # Buttons
         bf = tk.Frame(win, bg="#0f0f0f")
         bf.pack(fill="x", padx=14, pady=10)
         bs = dict(font=("Consolas", 9, "bold"), relief="flat", padx=12, pady=5)
+        if self._is_edit:
             tk.Button(bf, text="💾 Save Changes", bg="#1a2a3a", fg="#82b4ff",
+                      command=self._on_add, **bs).pack(side="left", padx=2)
+        else:
             tk.Button(bf, text="+ Add to Flow", bg="#1a3a1a", fg="#69ff9a",
                       command=self._on_add, **bs).pack(side="left", padx=2)
         tk.Button(bf, text="Cancel", bg="#222", fg="#aaa",
@@ -2604,6 +2494,8 @@ class AddStepDialog:
         for w in self._pframe.winfo_children():
             w.destroy()
         self._param_vars = {}
+        self._coord_widgets = []   # x/y entries + Pick buttons, toggled by 'click_first'
+        self._text_entry = None    # the "text to type" entry, for auto-focus
         import json as _j
         keys      = list(params_dict.keys())
         has_xy    = "x" in keys and "y" in keys
@@ -2614,19 +2506,38 @@ class AddStepDialog:
             wt, label = meta
             row = tk.Frame(self._pframe, bg="#0f0f0f")
             row.pack(fill="x", pady=2)
+
+            # Boolean params render as a checkbox (e.g. "Click a field first").
+            if wt == "bool":
+                bvar = tk.BooleanVar(value=bool(default))
+                self._param_vars[key] = (bvar, "bool")
+                tk.Checkbutton(row, text=label, variable=bvar,
+                               bg="#0f0f0f", fg="#ddd", selectcolor="#1a1a1a",
+                               activebackground="#0f0f0f", font=("Consolas", 9),
+                               anchor="w", cursor="hand2",
+                               command=self._sync_coord_widgets).pack(side="left", fill="x", expand=True)
+                continue
+
             tk.Label(row, text=label, width=24, **_LBL_STYLE).pack(side="left")
             val = _j.dumps(default) if wt == "json" else str(default)
             var = tk.StringVar(value=val)
             self._param_vars[key] = (var, wt)
-            tk.Entry(row, textvariable=var, **_ENT_STYLE).pack(
-                     side="left", fill="x", expand=True, padx=(0, 4))
+            # The "text to type" cell gets an accent style so it stands out from
+            # the (similar-looking) Step Name field above.
+            ent_style = _ENT_STYLE_TEXT if key == "text" else _ENT_STYLE
+            ent = tk.Entry(row, textvariable=var, **ent_style)
+            ent.pack(side="left", fill="x", expand=True, padx=(0, 4))
+            if key == "text":
+                self._text_entry = ent
             # Pick button on X and Y rows
             if key in ("x", "y") and has_xy:
-                tk.Button(row, text="Pick",
-                          bg="#2a1f3a", fg="#c084fc",
-                          font=("Consolas", 8, "bold"), relief="flat",
-                          padx=6, pady=3, cursor="hand2",
-                          command=self._pick_xy).pack(side="left")
+                btn = tk.Button(row, text="Pick",
+                                bg="#2a1f3a", fg="#c084fc",
+                                font=("Consolas", 8, "bold"), relief="flat",
+                                padx=6, pady=3, cursor="hand2",
+                                command=self._pick_xy)
+                btn.pack(side="left")
+                self._coord_widgets.extend([ent, btn])
             # Draw button on first bbox row only
             elif key in ("x1","y1","x2","y2") and has_bbox and not bbox_done:
                 bbox_done = True
@@ -2642,6 +2553,22 @@ class AddStepDialog:
                           font=("Consolas", 8, "bold"), relief="flat",
                           padx=6, pady=3, cursor="hand2",
                           command=self._show_keys_info).pack(side="left")
+        self._sync_coord_widgets()
+
+    def _sync_coord_widgets(self):
+        """Enable/disable the x,y coord fields based on the 'click_first' checkbox.
+        When the box is off (default), the coords are greyed out — Type Text just
+        types, no click. No effect on steps without a 'click_first' param."""
+        cf = self._param_vars.get("click_first")
+        widgets = getattr(self, "_coord_widgets", [])
+        if not cf or not widgets:
+            return
+        state = "normal" if bool(cf[0].get()) else "disabled"
+        for w in widgets:
+            try:
+                w.config(state=state)
+            except Exception:
+                pass
     def _get_monitors(self):
         try:
             import __main__
@@ -2666,15 +2593,20 @@ class AddStepDialog:
         except Exception:
             mon = monitors[0]
         self.win.withdraw()
+        def _restore():
+            try:
+                self.win.deiconify(); self.win.lift(); self.win.focus_force()
+            except Exception:
+                pass
         def on_picked(x, y):
-            self.win.deiconify(); self.win.lift(); self.win.focus_force()
+            _restore()
             if "x" in self._param_vars: self._param_vars["x"][0].set(str(int(x)))
             if "y" in self._param_vars: self._param_vars["y"][0].set(str(int(y)))
         try:
             import __main__
             CPO = getattr(__main__, "CoordinatePickOverlay", None)
             if CPO:
-                CPO(self.win, mon, on_picked); return
+                CPO(self.win, mon, on_picked, _restore); return   # on_cancel restores on Esc
         except Exception:
             pass
         # Fallback — exact replica of CoordinatePickOverlay
@@ -2757,12 +2689,6 @@ class AddStepDialog:
     def _on_type_change(self, _=None):
         entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
                      self._catalogue[0])
-        entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                     self._catalogue[0])
-        entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                     self._catalogue[0])
-        entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                     self._catalogue[0])
         self._desc_var.set(entry[4])
         if not self._is_edit:
             # Only auto-fill the name in Add mode — don't clobber a
@@ -2793,16 +2719,7 @@ class AddStepDialog:
         if self._type_combo_active:
             entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
                          self._catalogue[0])
-            entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                         self._catalogue[0])
-            entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                         self._catalogue[0])
-            entry = next((c for c in self._catalogue if c[0] == self._type_var.get()),
-                         self._catalogue[0])
             _, type_str, cat_str, _, description = entry
-            proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
-            proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
-            proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
             proc_type = _resolve_proc_type(type_str)   # P6.3: enum or dynamic key
             category  = ProcedureCategory(cat_str)
         else:
@@ -2814,6 +2731,9 @@ class AddStepDialog:
         # Parse params
         params = {}
         for key, (var, wt) in self._param_vars.items():
+            if wt == "bool":
+                params[key] = bool(var.get())
+                continue
             raw = var.get().strip()
             try:
                 if   wt == "int":   params[key] = int(raw)
@@ -2987,6 +2907,28 @@ class ProcedureFlowDialog:
         tk.Button(tb2, text="🎴 Checks",      bg="#1a2a30", fg="#90e0ef", command=self._open_check_gallery, **bs).pack(side="left", padx=2)
         tk.Button(tb2, text="💾 Save Template",bg="#1a2a2a", fg="#90e0ef", command=self._save_template, **bs).pack(side="left", padx=2)
         tk.Button(tb2, text="📂 Load Template",bg="#1a2030", fg="#82b4ff", command=self._load_template, **bs).pack(side="left", padx=2)
+
+        # Visual step palette (P4.4) — one quick-add button per addable step type,
+        # auto-generated from the registry, so new plugins get a button for free.
+        tb3 = tk.Frame(tb, bg=BG2)
+        tb3.pack(fill="x", pady=(6, 0))
+        tk.Label(tb3, text="＋ Quick add:", bg=BG2, fg="#888",
+                 font=("Consolas", 8, "bold")).pack(side="left", padx=(2, 6))
+        _pal_colors = {"action":       ("#13241a", "#69ff9a"),
+                       "verification": ("#13202e", "#82b4ff"),
+                       "utility":      ("#241f0a", "#f9c74f")}
+        for _entry in _dynamic_catalogue():
+            _name, _key, _cat, _defaults, _desc = _entry
+            # Palette = quick, simple steps only. Verifications need configuration,
+            # so they stay in the "+ Add" dialog (dropdown) — not the palette.
+            if _cat not in ("action", "utility"):
+                continue
+            _bg, _fg = _pal_colors.get(_cat, ("#1a1a1a", "#cccccc"))
+            tk.Button(tb3, text=_name, bg=_bg, fg=_fg,
+                      font=("Consolas", 8, "bold"), relief="flat", padx=7, pady=3,
+                      cursor="hand2",
+                      command=lambda e=_entry: self._quick_add(e)).pack(side="left", padx=2)
+
         # Search
         sf = tk.Frame(win, bg=BG)
         sf.pack(fill="x", padx=14, pady=(0, 4))
@@ -3410,6 +3352,110 @@ class ProcedureFlowDialog:
             if group: group.add_step(dlg.result)
             else: self.flow.add(dlg.result)
             self._refresh_tree()
+
+    def _quick_add(self, entry):
+        """Visual-palette quick-add (P4.4): drop a step of the chosen catalogue type
+        into the selected IO folder (or the flow) with default params + a unique
+        name. The user can then edit params via ✏ Edit if needed."""
+        name, key, cat, defaults, desc = entry
+        iids = self._sel_iids()
+        group = None
+        if iids:
+            f = iids[0]
+            if f.startswith("io::"):
+                group = self.flow.get_io_group(f[4:])
+            elif f.startswith("step::"):
+                group = self._find_group(f)
+        target = group if group else self.flow
+        # Unique name within the target (Click, Click 2, Click 3, …)
+        base, uniq, i = name, name, 2
+        while target.get(uniq) is not None:
+            uniq = f"{base} {i}"; i += 1
+        try:
+            category = ProcedureCategory(cat)
+        except ValueError:
+            category = ProcedureCategory.UTILITY
+        proc = Procedure(proc_type=_resolve_proc_type(key), category=category,
+                         name=uniq, params=dict(defaults), description=desc,
+                         step_id=_next_step_id())
+        if group:
+            group.add_step(proc)
+        else:
+            self.flow.add(proc)
+        self._refresh_tree()
+
+        # Click / Right Click: jump straight into picking coords for a fast UX
+        # (you can still double-click the step later to edit anything).
+        if key in ("click", "right_click"):
+            def _set_coords(x, y, p=proc):
+                p.params["x"] = int(x)
+                p.params["y"] = int(y)
+                self._refresh_tree()
+            self._pick_point(_set_coords)
+        # Text: open the step editor with the "text to type" field focused, ready
+        # to type immediately (mirrors Click jumping into the coord picker).
+        elif key == "type_text":
+            mon = self._monitor
+            try:
+                import __main__
+                if mon is None:
+                    mon = getattr(getattr(__main__, "app", None), "active_mon", None)
+            except Exception:
+                pass
+            dlg = AddStepDialog(self.win, target, monitor=mon, edit_step=proc)
+            self.win.wait_window(dlg.win)
+            self._refresh_tree()
+
+    def _pick_point(self, on_picked):
+        """Fullscreen overlay to capture one screen coordinate (x, y), then call
+        on_picked(x, y). Mirrors AddStepDialog._pick_xy so the palette can grab
+        coords for Click/Right Click immediately."""
+        import tkinter as tk
+        mons = _detect_monitors()
+        mon = None
+        try:
+            import __main__
+            mon = getattr(getattr(__main__, "app", None), "active_mon", None)
+        except Exception:
+            pass
+        if mon is None:
+            mon = mons[0] if mons else None
+        if mon is None:
+            return
+        self.win.withdraw()
+        def _restore():
+            try:
+                self.win.deiconify(); self.win.lift(); self.win.focus_force()
+            except Exception:
+                pass
+        def _done(x, y):
+            _restore()
+            on_picked(int(x), int(y))
+        try:
+            import __main__
+            CPO = getattr(__main__, "CoordinatePickOverlay", None)
+            if CPO:
+                CPO(self.win, mon, _done, _restore); return   # on_cancel restores on Esc
+        except Exception:
+            pass
+        # Fallback overlay (replica of AddStepDialog._pick_xy)
+        ov = tk.Toplevel(self.win)
+        ov.geometry(f"{mon.width}x{mon.height}+{mon.x}+{mon.y}")
+        ov.overrideredirect(True); ov.attributes("-topmost", True)
+        ov.attributes("-alpha", 0.15); ov.configure(bg="#AA00FF")
+        c = tk.Canvas(ov, bg="#AA00FF", highlightthickness=0, cursor="target")
+        c.pack(fill="both", expand=True)
+        c.create_text(mon.width // 2, 50,
+            text="\U0001f3af CLICK TO CAPTURE COORDINATE  |  Esc to cancel",
+            fill="#ffffff", font=("Consolas", 14, "bold"))
+        def _click(e):
+            ov.destroy(); _done(e.x_root, e.y_root)
+        def _cancel(e):
+            ov.destroy()
+            try: self.win.deiconify(); self.win.lift()
+            except Exception: pass
+        c.bind("<Button-1>", _click); ov.bind("<Escape>", _cancel)
+        ov.focus_force()
 
     def _edit_step(self):
         iids = self._sel_iids()

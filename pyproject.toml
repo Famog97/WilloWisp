@@ -9,6 +9,7 @@ version = "0.1.0"
 description = "WilloWisp — ISCS AutoClick test automation framework"
 
 [project.optional-dependencies]
+pdf = ["fpdf2>=2.7,<3"]   # enables the "Summary PDF" report template
 test = [
     "pytest>=7.4,<9",
     "hypothesis>=6.100,<7",
