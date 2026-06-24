@@ -33,15 +33,14 @@ core infra (registry / EventBus / DI container / discovery).
   all 7 verifications + all input/nav/screenshot actions; OCR/colour logic untouched in ISCSVerifier).
 
 **Not done — run-required (need the app at the SCADA rig to verify):**
-- P4.2 `auto_register` via `is_applicable` (low value). Phase 5(rest): UI template picker · Engineering
-  template · PDF/JSON renderers · widget split (P5.1). (P4.1 palette = DONE, live palette unchanged.)
+- P4.2 `auto_register` via `is_applicable` (low value). (P4.1 palette = DONE, live palette unchanged;
+  Phase 5 UI picker / Engineering / PDF / JSON / widget split P5.1 all DONE.)
 
 **Not done — cleanup, only after the above:**
 - P6.2 optional-dependency manifest · P6.3 remove legacy dispatch fallback + delete enum members.
 
 **Design patterns still unrealized:** rich `ExecutionContext` facade (currently the `LegacyExecContext`
-bridge) · `VerificationBackend` · report *widgets* (have templates, not widgets) ·
-`BaseCapability` template-method · `is_applicable` Specification.
+bridge) · `BaseCapability` template-method · `is_applicable` Specification.
 
 ---
 
@@ -168,7 +167,13 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - [x] **P5 PDF renderer** — `render_pdf` (via `fpdf2`, a binary `write` template) added as a 5th picker
       option "Summary PDF". Requires `pip install fpdf2`; without it the picker shows a clear install
       message. 3 tests (registration always; generation skips if fpdf2 absent).
-- [ ] **P5 (optional)** full split of legacy HTML into composable widgets (P5.1).
+- [x] **P5.1** Composable, self-describing report **widgets** (FR-30c/FR-30d) — `iscs_report_templates`
+      now has a `ReportWidget` base + `register/get/list_widget` registry + `ResultView` (FR-30e data
+      layer) + 7 built-in widgets (header / kpis / failures_by_category / failed_points / summary_line /
+      audit_attempts / step_traces). The management/engineering/audit templates are now **pure widget
+      config** (an ordered `widgets` list); `render_widgets()` composes them — enable/disable/reorder +
+      new widgets need no engine edit. json/pdf stay format-specific renderers (FR-30f). The legacy
+      `Suite_Report.html` is untouched (the built-in "Legacy" view, FR-30a). 14 tests.
 
 ## Phase 6 — Versioning & hardening (started)
 - [x] **P6.1** `schema_version` on persisted **flows** + chained migration mechanism in
@@ -198,10 +203,10 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 | **2 — Wiring & events** | ✅ lifecycle events (runner + suite); report + recorder are event subscribers. *P2.1 DI live-wiring deferred — low value.* |
 | **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID registered, no if/elif). *trigger_alarm/reset_alarm intentionally legacy (protocol-critical).* |
 | **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
-| **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker. *PDF needs `pip install fpdf2`. Widget split (P5.1) optional.* |
+| **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker + **composable widgets (P5.1)** — HTML templates are now widget config. *PDF needs `pip install fpdf2`.* |
 | **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3 — arbitrary plugin step keys add/save/load/run). *P6.2 optional-dep manifest todo.* |
 
-**Total: 217 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
+**Total: 231 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
 
 ### Live-validated at the SCADA rig
 - ✅ **Core path re-validated after the 2026-06-23 repair**: trigger → verify → reset → consolidated report.
@@ -210,8 +215,8 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - ⏳ Not yet separately exercised: nav actions (run a flow that navigates).
 
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
-report widget split (P5.1) · P4.2 `is_applicable` · P6.2 optional-dep manifest · P2.1 DI live-wiring
-· port trigger_alarm/reset_alarm (deferred, protocol-critical).
+P4.2 `is_applicable` · P6.2 optional-dep manifest · P2.1 DI live-wiring · port trigger_alarm/reset_alarm
+(deferred, protocol-critical).
 
 > ⚠️ **2026-06-23 repair note:** accidental edits deleted `iscs_core/container.py` (was untracked) and reverted
 > the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All restored; 204 tests pass; core

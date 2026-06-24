@@ -20,6 +20,7 @@ import datetime
 import html
 import json
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -64,13 +65,97 @@ def _page(title: str, body: str) -> str:
 </style></head><body>{body}</body></html>"""
 
 
-# ── templates ─────────────────────────────────────────────────────────────────
+# ── data view (FR-30e) ──────────────────────────────────────────────────────────
 
-def render_management(records: List[dict], meta: Dict[str, Any]) -> str:
-    """Management summary: KPIs + failures-by-category + top failures. No step detail."""
-    s = _summary(records)
-    rate_cls = "pass" if s["pass_rate"] >= 100 else ("fail" if s["failed"] else "pass")
-    kpis = f"""
+@dataclass
+class ResultView:
+    """The immutable execution-data layer widgets bind to (FR-30e). Built once
+    per render from the normalized results; each widget reads only what it
+    declares in ``consumes``."""
+    records: List[dict]
+    summary: Dict[str, Any]
+    meta: Dict[str, Any]
+
+
+# ── composable, self-describing widgets (FR-30c / FR-30d) ────────────────────────
+#
+# Each widget declares the data it consumes and renders its own HTML fragment.
+# A template (see TEMPLATES) is just an ordered list of widget keys — enable /
+# disable / reorder is pure config, no engine change. A new widget = register it
+# and reference its key from a template; existing templates + engine untouched.
+
+class ReportWidget:
+    """Base for a self-rendering report section.
+
+    Subclasses set ``key`` and ``consumes`` (which ``ResultView`` fields it
+    reads) and implement ``render(view) -> html fragment``.
+    """
+    key: str = ""
+    consumes: tuple = ()
+
+    def render(self, view: "ResultView") -> str:
+        raise NotImplementedError
+
+
+_WIDGETS: Dict[str, ReportWidget] = {}
+
+
+def register_widget(widget: ReportWidget, *, override: bool = False) -> None:
+    """Register a report widget by its ``key`` (FR-7 duplicate check)."""
+    key = getattr(widget, "key", "")
+    if not key:
+        raise ValueError("ReportWidget.key must be a non-empty string")
+    if key in _WIDGETS and not override:
+        raise ValueError(f"Report widget already registered for key {key!r} "
+                         f"(pass override=True to replace)")
+    _WIDGETS[key] = widget
+
+
+def get_widget(key: str) -> ReportWidget:
+    """Look up a widget by key; raises ``LookupError`` with a clear message."""
+    try:
+        return _WIDGETS[key]
+    except KeyError:
+        known = ", ".join(sorted(_WIDGETS)) or "(none)"
+        raise LookupError(f"No report widget registered for {key!r}. Known: {known}")
+
+
+def list_widgets() -> List[Dict[str, Any]]:
+    """All registered widgets + the data each declares it consumes."""
+    return [{"key": _WIDGETS[k].key, "consumes": list(_WIDGETS[k].consumes)}
+            for k in sorted(_WIDGETS)]
+
+
+class HeaderWidget(ReportWidget):
+    key = "header"
+    consumes = ("meta",)
+
+    def render(self, view: "ResultView") -> str:
+        m = view.meta
+        return (f'<h1>{_e(m.get("title", "Test Run"))} — '
+                f'{_e(m.get("report_name", ""))}</h1>\n'
+                f'<div class="sub">Generated {_e(m.get("generated"))} · '
+                f'{_e(m.get("range", ""))}</div>')
+
+
+class SummaryLineWidget(ReportWidget):
+    key = "summary_line"
+    consumes = ("summary",)
+
+    def render(self, view: "ResultView") -> str:
+        s = view.summary
+        return (f'<div class="sub">{s["total"]} points · {s["passed"]} passed / '
+                f'{s["failed"]} failed ({s["pass_rate"]:.1f}%)</div>')
+
+
+class KpisWidget(ReportWidget):
+    key = "kpis"
+    consumes = ("summary",)
+
+    def render(self, view: "ResultView") -> str:
+        s = view.summary
+        rate_cls = "pass" if s["pass_rate"] >= 100 else ("fail" if s["failed"] else "pass")
+        return f"""
      <div class="kpis">
        <div class="kpi"><div class="v">{s['total']}</div><div class="l">Points</div></div>
        <div class="kpi"><div class="v pass">{s['passed']}</div><div class="l">Passed</div></div>
@@ -78,80 +163,103 @@ def render_management(records: List[dict], meta: Dict[str, Any]) -> str:
        <div class="kpi"><div class="v {rate_cls}">{s['pass_rate']:.1f}%</div><div class="l">Pass rate</div></div>
      </div>"""
 
-    cats = "".join(f"<tr><td>{_e(c)}</td><td>{n}</td></tr>"
-                   for c, n in s["categories"].most_common()) or \
-        "<tr><td colspan='2'>No failures 🎉</td></tr>"
 
-    fails = [r for r in records if r.get("overall") == "FAIL"]
-    rows = "".join(
-        f"<tr><td>{_e(r.get('id'))}</td><td>{_e(r.get('scenario_name'))}</td>"
-        f"<td>{_e(r.get('failure_category'))}</td><td>{_e(r.get('failure_reason'))}</td></tr>"
-        for r in fails) or "<tr><td colspan='4'>None</td></tr>"
+class FailuresByCategoryWidget(ReportWidget):
+    key = "failures_by_category"
+    consumes = ("summary",)
 
-    body = f"""
-     <h1>{_e(meta.get('title','Test Run'))} — Management Summary</h1>
-     <div class="sub">Generated {_e(meta.get('generated'))} · {_e(meta.get('range',''))}</div>
-     {kpis}
-     <h3>Failures by category</h3>
-     <table><tr><th>Category</th><th>Count</th></tr>{cats}</table>
-     <h3>Failed points</h3>
-     <table><tr><th>Point</th><th>Scenario</th><th>Category</th><th>Reason</th></tr>{rows}</table>"""
-    return _page(f"{meta.get('title','Test Run')} — Management Summary", body)
+    def render(self, view: "ResultView") -> str:
+        cats = "".join(f"<tr><td>{_e(c)}</td><td>{n}</td></tr>"
+                       for c, n in view.summary["categories"].most_common()) or \
+            "<tr><td colspan='2'>No failures 🎉</td></tr>"
+        return ("<h3>Failures by category</h3>"
+                f"<table><tr><th>Category</th><th>Count</th></tr>{cats}</table>")
 
 
-def render_audit(records: List[dict], meta: Dict[str, Any]) -> str:
-    """Audit: immutable, full per-attempt record with timestamps for traceability."""
-    s = _summary(records)
-    rows = []
-    for r in records:
-        for a in (r.get("attempts") or [{"attempt": 0, "overall": r.get("overall"),
-                                          "failure_reason": r.get("failure_reason")}]):
-            st = a.get("overall", "")
-            cls = "pass" if st == "PASS" else "fail"
-            rows.append(
-                f"<tr><td>{_e(r.get('id'))}</td><td>{_e(r.get('scenario_name'))}</td>"
-                f"<td>{_e(r.get('loop_num'))}</td><td>{a.get('attempt')}</td>"
-                f"<td><span class='tag {cls}'>{_e(st)}</span></td>"
-                f"<td>{_e(a.get('failure_reason'))}</td></tr>")
-    body = f"""
-     <h1>{_e(meta.get('title','Test Run'))} — Audit Record</h1>
-     <div class="sub">Generated {_e(meta.get('generated'))} · {_e(meta.get('range',''))} ·
-       {s['total']} points · {s['passed']} passed / {s['failed']} failed ·
-       {len(rows)} recorded attempts</div>
-     <table><tr><th>Point</th><th>Scenario</th><th>Loop</th><th>Attempt</th>
-       <th>Status</th><th>Reason</th></tr>{''.join(rows)}</table>"""
-    return _page(f"{meta.get('title','Test Run')} — Audit Record", body)
+class FailedPointsWidget(ReportWidget):
+    key = "failed_points"
+    consumes = ("records",)
+
+    def render(self, view: "ResultView") -> str:
+        fails = [r for r in view.records if r.get("overall") == "FAIL"]
+        rows = "".join(
+            f"<tr><td>{_e(r.get('id'))}</td><td>{_e(r.get('scenario_name'))}</td>"
+            f"<td>{_e(r.get('failure_category'))}</td><td>{_e(r.get('failure_reason'))}</td></tr>"
+            for r in fails) or "<tr><td colspan='4'>None</td></tr>"
+        return ("<h3>Failed points</h3>"
+                "<table><tr><th>Point</th><th>Scenario</th><th>Category</th>"
+                f"<th>Reason</th></tr>{rows}</table>")
 
 
-def render_engineering(records: List[dict], meta: Dict[str, Any]) -> str:
-    """Engineering view: every point with its full step-by-step trace + reason."""
-    s = _summary(records)
-    blocks = []
-    for r in records:
-        oc = r.get("overall", "")
-        cls = "pass" if oc == "PASS" else "fail"
-        step_rows = "".join(
-            f"<tr><td>{_e(st.get('name'))}</td>"
-            f"<td><span class='tag {'pass' if st.get('status')=='PASS' else 'fail'}'>"
-            f"{_e(st.get('status'))}</span></td>"
-            f"<td>{_e(st.get('message'))}</td></tr>"
-            for st in (r.get("steps") or [])) or "<tr><td colspan='3'>No steps</td></tr>"
-        reason = ""
-        if oc == "FAIL":
-            reason = (f"<div class='sub'>↳ {_e(r.get('failure_category'))}: "
-                      f"{_e(r.get('failure_reason'))}</div>")
-        blocks.append(f"""
+class AuditAttemptsWidget(ReportWidget):
+    key = "audit_attempts"
+    consumes = ("records", "summary")
+
+    def render(self, view: "ResultView") -> str:
+        s = view.summary
+        rows = []
+        for r in view.records:
+            for a in (r.get("attempts") or [{"attempt": 0, "overall": r.get("overall"),
+                                             "failure_reason": r.get("failure_reason")}]):
+                st = a.get("overall", "")
+                cls = "pass" if st == "PASS" else "fail"
+                rows.append(
+                    f"<tr><td>{_e(r.get('id'))}</td><td>{_e(r.get('scenario_name'))}</td>"
+                    f"<td>{_e(r.get('loop_num'))}</td><td>{a.get('attempt')}</td>"
+                    f"<td><span class='tag {cls}'>{_e(st)}</span></td>"
+                    f"<td>{_e(a.get('failure_reason'))}</td></tr>")
+        return (f'<div class="sub">{s["total"]} points · {s["passed"]} passed / '
+                f'{s["failed"]} failed · {len(rows)} recorded attempts</div>'
+                "<table><tr><th>Point</th><th>Scenario</th><th>Loop</th><th>Attempt</th>"
+                f"<th>Status</th><th>Reason</th></tr>{''.join(rows)}</table>")
+
+
+class StepTracesWidget(ReportWidget):
+    key = "step_traces"
+    consumes = ("records",)
+
+    def render(self, view: "ResultView") -> str:
+        blocks = []
+        for r in view.records:
+            oc = r.get("overall", "")
+            cls = "pass" if oc == "PASS" else "fail"
+            step_rows = "".join(
+                f"<tr><td>{_e(st.get('name'))}</td>"
+                f"<td><span class='tag {'pass' if st.get('status')=='PASS' else 'fail'}'>"
+                f"{_e(st.get('status'))}</span></td>"
+                f"<td>{_e(st.get('message'))}</td></tr>"
+                for st in (r.get("steps") or [])) or "<tr><td colspan='3'>No steps</td></tr>"
+            reason = ""
+            if oc == "FAIL":
+                reason = (f"<div class='sub'>↳ {_e(r.get('failure_category'))}: "
+                          f"{_e(r.get('failure_reason'))}</div>")
+            blocks.append(f"""
          <h3><span class="tag {cls}">{_e(oc)}</span> {_e(r.get('id'))}
              <span class="sub">— {_e(r.get('scenario_name'))} · loop {_e(r.get('loop_num'))}</span></h3>
          {reason}
          <table><tr><th>Step</th><th>Status</th><th>Detail</th></tr>{step_rows}</table>""")
-    body = f"""
-     <h1>{_e(meta.get('title','Test Run'))} — Engineering Report</h1>
-     <div class="sub">Generated {_e(meta.get('generated'))} · {_e(meta.get('range',''))} ·
-       {s['total']} points · {s['passed']} passed / {s['failed']} failed
-       ({s['pass_rate']:.1f}%)</div>
-     {''.join(blocks)}"""
-    return _page(f"{meta.get('title','Test Run')} — Engineering Report", body)
+        return "".join(blocks)
+
+
+# Register the built-in widgets. New widgets register the same way (FR-30d).
+for _w in (HeaderWidget(), SummaryLineWidget(), KpisWidget(),
+           FailuresByCategoryWidget(), FailedPointsWidget(),
+           AuditAttemptsWidget(), StepTracesWidget()):
+    register_widget(_w)
+
+
+# ── template composition (FR-30c) ────────────────────────────────────────────────
+
+def render_widgets(widget_keys: List[str], records: List[dict],
+                   meta: Dict[str, Any]) -> str:
+    """Compose an ordered list of widget keys into a full HTML page. A template
+    is defined purely by its widget list (``TEMPLATES[...]['widgets']``), so
+    enabling / disabling / reordering sections needs no engine change."""
+    view = ResultView(records, _summary(records), meta)
+    body = "\n".join(get_widget(k).render(view) for k in widget_keys)
+    name = meta.get("report_name", "")
+    title = f"{meta.get('title', 'Test Run')} — {name}" if name else meta.get("title", "Test Run")
+    return _page(title, body)
 
 
 def render_json(records: List[dict], meta: Dict[str, Any]) -> str:
@@ -229,13 +337,19 @@ def render_pdf(records: List[dict], meta: Dict[str, Any], path) -> None:
 
 # ── registry (FR-30, FR-30b) ──────────────────────────────────────────────────
 
+# HTML templates are pure composition config — an ordered ``widgets`` list (FR-30c).
+# Adding/reordering a section, or adding a whole template, needs no engine change.
+# json/pdf are format-specific renderers (FR-30f) and keep their own hooks.
 TEMPLATES: Dict[str, Dict[str, Any]] = {
     "management":  {"name": "Management Summary", "audience": "management",
-                    "filename": "Management_Summary.html", "render": render_management},
+                    "filename": "Management_Summary.html",
+                    "widgets": ["header", "kpis", "failures_by_category", "failed_points"]},
     "engineering": {"name": "Engineering Report", "audience": "engineering",
-                    "filename": "Engineering_Report.html", "render": render_engineering},
+                    "filename": "Engineering_Report.html",
+                    "widgets": ["header", "summary_line", "step_traces"]},
     "audit":       {"name": "Audit Record", "audience": "audit",
-                    "filename": "Audit_Report.html", "render": render_audit},
+                    "filename": "Audit_Report.html",
+                    "widgets": ["header", "audit_attempts"]},
     "json":        {"name": "Results JSON", "audience": "data",
                     "filename": "Results.json", "render": render_json},
     "pdf":         {"name": "Summary PDF", "audience": "print",
@@ -254,7 +368,8 @@ def render_html(template_key: str, raw_results: List[dict],
     if template_key not in TEMPLATES:
         raise KeyError(f"Unknown report template {template_key!r}. "
                        f"Available: {sorted(TEMPLATES)}")
-    if "render" not in TEMPLATES[template_key]:
+    entry = TEMPLATES[template_key]
+    if "widgets" not in entry and "render" not in entry:
         raise ValueError(f"Template {template_key!r} is a binary format — "
                          f"use generate_template_report() to write it.")
     records = _normalize(raw_results)
@@ -263,7 +378,10 @@ def render_html(template_key: str, raw_results: List[dict],
         "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "range": f"{start} → {end}" if (start or end) else "",
     }
-    return TEMPLATES[template_key]["render"](records, meta)
+    if "widgets" in entry:
+        meta["report_name"] = entry["name"]
+        return render_widgets(entry["widgets"], records, meta)
+    return entry["render"](records, meta)
 
 
 def generate_template_report(template_key: str, raw_results: List[dict], output_dir,
