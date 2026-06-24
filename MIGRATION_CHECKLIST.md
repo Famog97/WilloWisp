@@ -1,47 +1,42 @@
 # WilloWisp Modernization — Migration Checklist
 
 Task-by-task breakdown of the Strangler-Fig migration in
-[`ARCHITECTURE_DESIGN.md`](ARCHITECTURE_DESIGN.md) §6. Each phase is shippable and
-reversible. **Phases 1–6 (the abstraction) are GATED** on Phase 0 completion and the
-agreed trigger (regression tests exist / `_exec_*` duplication becomes painful) — see
-the deferral decision. Phase 0 is active now.
-
-Legend: `[x]` done · `[~]` in progress · `[ ]` todo · `[gated]` deferred until gate met.
+[`ARCHITECTURE_DESIGN.md`](ARCHITECTURE_DESIGN.md) §6.
 
 > **`ARCHITECTURE_DESIGN.md` is the full target (north star); THIS file is the status tracker;
-> `LIVE_VALIDATION.md` is only the run-required subset.** We built the foundation + proved the
-> pattern end-to-end live, but intentionally did NOT mechanically complete every phase.
+> `LIVE_VALIDATION.md` is the run-required subset.**
 
-## Remaining work (what's NOT done yet, and why)
+**Status: migration FUNCTIONALLY COMPLETE.** Branch `2-new-update-on-modules` @ `52777a0` (pushed,
+in sync with origin). **241 tests pass**, 1 skipped (PDF, needs `fpdf2`). Everything still open is
+either deliberately deferred (low value / poor fit) or can only be verified on the SCADA rig.
 
-**Done & validated:** registry dispatch · plugin discovery + supersession (DELAY) · event-driven
-report + recorder · schema versioning (flows + assets) · report templates (Management/Audit) ·
-core infra (registry / EventBus / DI container / discovery).
+Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⏸️ **DEFERRED** (see reason).
 
-**Not done — deferred (low value / awkward fit):**
-- P2.1 DI wiring into live construction — verifier/runner are per-card with runtime args; protocols
-  already a registry. Container exists + tested; wiring adds indirection for little gain.
+## ✅ FINISHED (done + committed; live-validated items noted)
 
-**Not done — need-driven (do when you next touch that code):**
-- ~~P3.4 formalize `BindingResolver` for TEXT/IMAGE/HYBRID~~ — **DONE** (TEXT/IMAGE/HYBRID are now
-  registered `BindingResolver` strategies in `iscs_assets`; `BindingExecutor` dispatches by key, no
-  if/elif. A new kind = register a resolver, no executor edit. Self-contained — no `iscs_core` dep.
-  10 tests; behavior-neutral, offline-validated).
-- Port `trigger_alarm` / `reset_alarm` to plugins — **intentionally deferred** (protocol + sampler
-  timing critical; the 2 of 19 step types still on legacy adapters).
-- ~~P3.1 port actions~~ / ~~P3.2 decompose `ISCSVerifier`~~ — **DONE** (17/19 step types are plugins;
-  all 7 verifications + all input/nav/screenshot actions; OCR/colour logic untouched in ISCSVerifier).
+- **Phase 0** safety net — pytest harness, golden fixtures, coverage gate.
+- **Phase 1** registry & contracts — capability registry is the live dispatch path (legacy adapters + fallback).
+- **Phase 2** events — lifecycle events (runner + suite); report + recorder are event subscribers.
+- **Phase 3** capabilities out of the engine — **17/19 step types run from plugins** (all 7 verifications
+  + a `VerificationBackend`, all input/nav/screenshot actions); **P3.4 `BindingResolver`** (TEXT/IMAGE/HYBRID).
+- **Phase 4** dynamic UI & discovery — registry-extensible Add-Step palette (P4.1) + plugin discovery (P4.3).
+- **Phase 5** reporting — templates (Management/Engineering/Audit/JSON/PDF) + raw-results persisted + 📊 UI
+  picker + **composable widgets (P5.1)** over a `ResultView` data layer.
+- **Phase 6** versioning & hardening — schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3
+  decoupling) + **optional-dependency load manifest (P6.2)**.
 
-**Not done — run-required (need the app at the SCADA rig to verify):**
-- P4.2 `auto_register` via `is_applicable` (low value). (P4.1 palette = DONE, live palette unchanged;
-  Phase 5 UI picker / Engineering / PDF / JSON / widget split P5.1 all DONE.)
+## ⏸️ DEFERRED (intentionally NOT done — nothing on the critical path)
 
-**Not done — cleanup, only after the above:**
-- P6.3 remove legacy dispatch fallback + delete enum members (intentionally deferred — trigger/reset
-  still legacy). *(P6.2 optional-dependency manifest — DONE.)*
+| Item | Why deferred | Category |
+|---|---|---|
+| **P4.2** `auto_register` via `is_applicable` | Poor fit: `auto_register_procedures` builds steps with bespoke params/`enabled`/`depends_on`/order; FR-21 would relocate that into capabilities for little gain, and it rewrites the live default-flow generator. The Specification pattern stays unrealized by choice. | Low value / poor fit |
+| **P2.1** DI live-wiring | Verifier/runner are per-card with runtime args; protocols are already a registry. `Container` exists + is tested; wiring adds indirection for little gain. Routing live construction can't be verified offline. | Low value / rig-required |
+| Port `trigger_alarm` / `reset_alarm` to plugins | Protocol + sampler timing critical; the 2 of 19 step types still on legacy adapters. | Protocol-critical / rig-required |
+| **P6.3** remove legacy dispatch fallback + delete enum members | Trigger/reset still use the legacy path, so the fallback + enum must stay. | Blocked by the two above |
+| **P5.1 (optional)** further split of the *legacy* `Suite_Report.html` into widgets | The audience templates are widget-composed; the legacy report stays intact by design (FR-30a "Legacy" view). | Not needed |
 
-**Design patterns still unrealized:** rich `ExecutionContext` facade (currently the `LegacyExecContext`
-bridge) · `BaseCapability` template-method · `is_applicable` Specification.
+**Design patterns still unrealized (by choice):** rich `ExecutionContext` facade (today the
+`LegacyExecContext` bridge) · `BaseCapability` template-method · `is_applicable` Specification (see P4.2).
 
 ---
 
@@ -227,6 +222,8 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
 P4.2 `is_applicable` · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).
 
-> ⚠️ **2026-06-23 repair note:** accidental edits deleted `iscs_core/container.py` (was untracked) and reverted
-> the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All restored; 204 tests pass; core
-> path re-validated live. **`iscs_core/container.py` must be committed** so it can't be lost again.
+> ✅ **2026-06-23 repair, now resolved:** accidental edits had deleted `iscs_core/container.py` (was
+> untracked) and reverted the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All
+> restored and **committed** (`container.py` is tracked as of `26480c3`), so it can't be silently lost
+> again. A later remote merge had stripped it once more; that regression was fixed on 2026-06-24 by
+> force-pushing the good local state, and origin is now in sync at `52777a0`.

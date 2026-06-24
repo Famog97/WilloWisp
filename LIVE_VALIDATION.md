@@ -1,10 +1,24 @@
 # Live Validation — run at the SCADA workstation
 
-The migration so far (Phases 0/1, P2.2, P2.3-emit, P6.1/P6.1b, discovery) is
-**additive / behavior-neutral** and backed by 133 offline tests. But the live
-capture + Modbus path can't be tested offline. This checklist validates the real
-run. Do **Phase A first** — it confirms nothing regressed before we change anything
-further.
+The migration is **additive / behavior-neutral** and backed by **241 offline tests**
+(1 skipped — PDF). But the live capture + Modbus path can't be tested offline. This
+checklist validates the real run. Do **Phase A first** — it confirms nothing regressed
+before changing anything further.
+
+## Status at a glance
+
+- ✅ **LIVE-CONFIRMED at the rig:** Phase A core path (trigger→verify→reset→report) ·
+  B1 DELAY plugin · B2 report-as-subscriber · B3 recorder-as-subscriber ·
+  B5 alarm-panel/normalize/list/event/equipment/custom verifications · B7 arbitrary
+  step (`example_noop`) · B8 📊 report UI picker.
+- ⏳ **CODE DONE, still awaiting a rig run:** B6 nav/screenshot actions (run a flow that
+  navigates) · B9 visual palette + Type-Text toggle · B10 PDF (after `pip install fpdf2`).
+- 🟢 **Offline-only — NO rig step needed** (additive, covered by tests; just confirm
+  Phase A still passes): P3.4 `BindingResolver` · P5.1 report widgets · P6.2 load
+  manifest · the duplicate-schema-block cleanup.
+- ⏸️ **DEFERRED — only relevant if you choose to do them at the rig:** B4 DI wiring
+  (P2.1) · porting `trigger_alarm`/`reset_alarm` (protocol-critical). See
+  `MIGRATION_CHECKLIST.md` for why.
 
 ---
 
@@ -81,9 +95,10 @@ Order is chosen so the smallest, safest cutover proves the pattern first.
    - [ ] Multi-card / looped suite: each card records correctly (no leaked/stale recorder)
    - If anything is off: `git checkout -- baru.py iscs_core/events.py` to revert, then tell Claude.
 
-4. **B4 — DI container wiring (P2.1).**
+4. **B4 — DI container wiring (P2.1).** ⏸️ **DEFERRED — not coded.** Low value: verifier/runner are
+   per-card with runtime args; protocols are already a registry. Only do this if a concrete need arises.
    Resolve `ProtocolManager` / verifier / runner through `iscs_core.Container`.
-   *Validate:* suite still connects Modbus + runs.
+   *Validate (if ever done):* suite still connects Modbus + runs.
 
 5. **B5 — Port the verification capabilities (Phase 3 / P3.2).**
    Move `_exec_verify_*` into `plugins/verifications/` one at a time. Orchestration moves to the
