@@ -23,8 +23,10 @@ core infra (registry / EventBus / DI container / discovery).
   already a registry. Container exists + tested; wiring adds indirection for little gain.
 
 **Not done — need-driven (do when you next touch that code):**
-- P3.4 formalize `BindingResolver` for TEXT/IMAGE/HYBRID (verify_custom is now a capability, but the
-  TEXT/IMAGE/HYBRID branching still lives inside `iscs_assets.BindingExecutor`).
+- ~~P3.4 formalize `BindingResolver` for TEXT/IMAGE/HYBRID~~ — **DONE** (TEXT/IMAGE/HYBRID are now
+  registered `BindingResolver` strategies in `iscs_assets`; `BindingExecutor` dispatches by key, no
+  if/elif. A new kind = register a resolver, no executor edit. Self-contained — no `iscs_core` dep.
+  10 tests; behavior-neutral, offline-validated).
 - Port `trigger_alarm` / `reset_alarm` to plugins — **intentionally deferred** (protocol + sampler
   timing critical; the 2 of 19 step types still on legacy adapters).
 - ~~P3.1 port actions~~ / ~~P3.2 decompose `ISCSVerifier`~~ — **DONE** (17/19 step types are plugins;
@@ -38,7 +40,7 @@ core infra (registry / EventBus / DI container / discovery).
 - P6.2 optional-dependency manifest · P6.3 remove legacy dispatch fallback + delete enum members.
 
 **Design patterns still unrealized:** rich `ExecutionContext` facade (currently the `LegacyExecContext`
-bridge) · `VerificationBackend` · `BindingResolver` · report *widgets* (have templates, not widgets) ·
+bridge) · `VerificationBackend` · report *widgets* (have templates, not widgets) ·
 `BaseCapability` template-method · `is_applicable` Specification.
 
 ---
@@ -119,7 +121,10 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       alarm_panel/normalize ones are live-confirmed; the rest await a live run with those
       zones/nav/custom steps configured.
 - [ ] **P3.3** Route protocol handling through `Container` + `ExecutionContext`
-- [ ] **P3.4** Convert TEXT/IMAGE/HYBRID binding `if/elif` → registered `BindingResolver`s
+- [x] **P3.4** Convert TEXT/IMAGE/HYBRID binding `if/elif` → registered `BindingResolver`s.
+      `iscs_assets` now has a `BindingResolver` base + `register/get/list_binding_resolver` registry +
+      `Text/Image/HybridBindingResolver`; `BindingExecutor.execute` dispatches by key (no if/elif).
+      Self-contained (no `iscs_core` dep). HYBRID composes the registered TEXT+IMAGE resolvers. 10 tests.
 - [ ] **P3.5** Delete each enum member + dispatch entry as its capability lands
 
 ## Phase 4 — Dynamic UI & auto-discovery
@@ -191,12 +196,12 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 | **0 — Safety net** | ✅ pytest harness (8/8), golden fixtures, coverage gate live |
 | **1 — Registry & contracts** | ✅ capability registry is the live dispatch path (legacy adapters + fallback) |
 | **2 — Wiring & events** | ✅ lifecycle events (runner + suite); report + recorder are event subscribers. *P2.1 DI live-wiring deferred — low value.* |
-| **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions. *trigger_alarm/reset_alarm intentionally legacy (protocol-critical). P3.4 BindingResolver todo.* |
+| **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID registered, no if/elif). *trigger_alarm/reset_alarm intentionally legacy (protocol-critical).* |
 | **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
 | **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker. *PDF needs `pip install fpdf2`. Widget split (P5.1) optional.* |
 | **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3 — arbitrary plugin step keys add/save/load/run). *P6.2 optional-dep manifest todo.* |
 
-**Total: 207 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `1-willowisp-first-issue`.
+**Total: 217 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
 
 ### Live-validated at the SCADA rig
 - ✅ **Core path re-validated after the 2026-06-23 repair**: trigger → verify → reset → consolidated report.
@@ -205,8 +210,8 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - ⏳ Not yet separately exercised: nav actions (run a flow that navigates).
 
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
-P3.4 `BindingResolver` (TEXT/IMAGE/HYBRID) · report widget split (P5.1) · P4.2 `is_applicable`
-· P6.2 optional-dep manifest · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).
+report widget split (P5.1) · P4.2 `is_applicable` · P6.2 optional-dep manifest · P2.1 DI live-wiring
+· port trigger_alarm/reset_alarm (deferred, protocol-critical).
 
 > ⚠️ **2026-06-23 repair note:** accidental edits deleted `iscs_core/container.py` (was untracked) and reverted
 > the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All restored; 204 tests pass; core

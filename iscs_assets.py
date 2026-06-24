@@ -906,16 +906,14 @@ class BindingExecutor:
 
         btype = binding.type
 
-        if btype == BindingType.TEXT:
-            return self._exec_text(img, resolved)
-        elif btype == BindingType.IMAGE:
-            return self._exec_image(img, resolved)
-        elif btype == BindingType.HYBRID:
-            return self._exec_hybrid(img, resolved)
-        else:
+        # Dispatch by registered resolver (FR-16) — no per-type branching.
+        try:
+            resolver = get_binding_resolver(btype)
+        except LookupError:
             return {"status": "SKIP",
                     "message": f"Unknown binding type {btype!r}",
                     "expected": "", "actual": "", "score": 0.0}
+        return resolver.resolve(img, resolved)
 
     # ── capture ───────────────────────────────────────────────────────────────
     def _capture_region(self, region: Region, screenshot_fn) -> Any:
@@ -931,8 +929,69 @@ class BindingExecutor:
         except Exception as e:
             raise RuntimeError(f"PIL ImageGrab failed: {e}")
 
-    # ── text verification ─────────────────────────────────────────────────────
-    def _exec_text(self, img: Any, resolved: dict) -> Dict[str, Any]:
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  BINDING RESOLVERS  (Strategy + Registry — FR-16, retires R9)
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Each binding kind (TEXT / IMAGE / HYBRID / future, e.g. a vision-LLM) is a
+# self-contained resolver registered by string key. BindingExecutor dispatches
+# by key instead of an if/elif chain, so adding a binding type means dropping in
+# a resolver and registering it — no edit to BindingExecutor.
+#
+# Kept self-contained in this module (no iscs_core import) so the asset store
+# stays standalone, consistent with the schema-versioning design (P6.1b).
+
+class BindingResolver:
+    """Strategy for executing one binding kind against a captured region image.
+
+    Subclasses set ``kind`` (matches ``BindingType`` / ``StepBinding.type``) and
+    implement ``resolve(img, resolved) -> result dict`` returning the same shape
+    ``BindingExecutor.execute`` does (status / message / expected / actual /
+    score, plus optional detail keys).
+    """
+    kind: str = ""
+
+    def resolve(self, img: Any, resolved: dict) -> Dict[str, Any]:
+        raise NotImplementedError
+
+
+_BINDING_RESOLVERS: Dict[str, BindingResolver] = {}
+
+
+def register_binding_resolver(resolver: BindingResolver, *,
+                              override: bool = False) -> None:
+    """Register a binding resolver by its ``kind`` key (FR-7 duplicate check)."""
+    kind = getattr(resolver, "kind", "")
+    if not kind:
+        raise ValueError("BindingResolver.kind must be a non-empty string")
+    if kind in _BINDING_RESOLVERS and not override:
+        raise ValueError(
+            f"Binding resolver already registered for kind {kind!r} "
+            f"(pass override=True to replace)")
+    _BINDING_RESOLVERS[kind] = resolver
+
+
+def get_binding_resolver(kind: str) -> BindingResolver:
+    """Look up a resolver by kind; raises ``LookupError`` with a clear message."""
+    try:
+        return _BINDING_RESOLVERS[kind]
+    except KeyError:
+        known = ", ".join(sorted(_BINDING_RESOLVERS)) or "(none)"
+        raise LookupError(
+            f"No binding resolver registered for {kind!r}. Known kinds: {known}")
+
+
+def list_binding_resolvers() -> List[str]:
+    """All registered binding kinds (drives diagnostics / future UI)."""
+    return sorted(_BINDING_RESOLVERS)
+
+
+class TextBindingResolver(BindingResolver):
+    """OCR the region and check the expected text is contained in the result."""
+    kind = BindingType.TEXT
+
+    def resolve(self, img: Any, resolved: dict) -> Dict[str, Any]:
         expected: str = resolved["expected_text"]
         asset: TextAsset = resolved["text_asset"]
 
@@ -963,8 +1022,12 @@ class BindingExecutor:
             "asset_name": asset.name,
         }
 
-    # ── image verification ────────────────────────────────────────────────────
-    def _exec_image(self, img: Any, resolved: dict) -> Dict[str, Any]:
+
+class ImageBindingResolver(BindingResolver):
+    """Template-match the region against the reference image (OpenCV)."""
+    kind = BindingType.IMAGE
+
+    def resolve(self, img: Any, resolved: dict) -> Dict[str, Any]:
         threshold: float   = resolved["threshold"]
         img_path:  Path    = resolved["image_path"]
         asset:     ImageAsset = resolved["image_asset"]
@@ -1026,10 +1089,18 @@ class BindingExecutor:
                     "message": f"Image match error: {e}",
                     "expected": "", "actual": "", "score": 0.0}
 
-    # ── hybrid verification ───────────────────────────────────────────────────
-    def _exec_hybrid(self, img: Any, resolved: dict) -> Dict[str, Any]:
-        text_result  = self._exec_text(img, resolved)
-        image_result = self._exec_image(img, resolved)
+
+class HybridBindingResolver(BindingResolver):
+    """Both the TEXT and IMAGE checks must pass.
+
+    Delegates to the registered TEXT and IMAGE resolvers, so swapping either of
+    those (e.g. a smarter text backend) automatically applies to HYBRID too.
+    """
+    kind = BindingType.HYBRID
+
+    def resolve(self, img: Any, resolved: dict) -> Dict[str, Any]:
+        text_result  = get_binding_resolver(BindingType.TEXT).resolve(img, resolved)
+        image_result = get_binding_resolver(BindingType.IMAGE).resolve(img, resolved)
 
         text_pass  = text_result["status"]  == "PASS"
         image_pass = image_result["status"] == "PASS"
@@ -1047,6 +1118,12 @@ class BindingExecutor:
             "text_detail":  text_result,
             "image_detail": image_result,
         }
+
+
+# Register the built-in resolvers. New binding kinds register the same way.
+register_binding_resolver(TextBindingResolver())
+register_binding_resolver(ImageBindingResolver())
+register_binding_resolver(HybridBindingResolver())
 
 
 # ── Module-level convenience functions ───────────────────────────────────────
