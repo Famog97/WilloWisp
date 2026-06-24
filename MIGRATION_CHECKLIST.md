@@ -17,8 +17,9 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⏸️ **DEFERRED** (see re
 - **Phase 0** safety net — pytest harness, golden fixtures, coverage gate.
 - **Phase 1** registry & contracts — capability registry is the live dispatch path (legacy adapters + fallback).
 - **Phase 2** events — lifecycle events (runner + suite); report + recorder are event subscribers.
-- **Phase 3** capabilities out of the engine — **17/19 step types run from plugins** (all 7 verifications
-  + a `VerificationBackend`, all input/nav/screenshot actions); **P3.4 `BindingResolver`** (TEXT/IMAGE/HYBRID).
+- **Phase 3** capabilities out of the engine — **19/19 step types run from plugins** (all 7 verifications
+  + a `VerificationBackend`, all input/nav/screenshot actions, and **`trigger_alarm`/`reset_alarm`**);
+  **P3.4 `BindingResolver`** (TEXT/IMAGE/HYBRID). *(trigger/reset port code-done, awaiting a rig run — B11.)*
 - **Phase 4** dynamic UI & discovery — registry-extensible Add-Step palette (P4.1) + plugin discovery (P4.3).
 - **Phase 5** reporting — templates (Management/Engineering/Audit/JSON/PDF) + raw-results persisted + 📊 UI
   picker + **composable widgets (P5.1)** over a `ResultView` data layer.
@@ -31,8 +32,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⏸️ **DEFERRED** (see re
 |---|---|---|
 | **P4.2** `auto_register` via `is_applicable` | Poor fit: `auto_register_procedures` builds steps with bespoke params/`enabled`/`depends_on`/order; FR-21 would relocate that into capabilities for little gain, and it rewrites the live default-flow generator. The Specification pattern stays unrealized by choice. | Low value / poor fit |
 | **P2.1** DI live-wiring | Verifier/runner are per-card with runtime args; protocols are already a registry. `Container` exists + is tested; wiring adds indirection for little gain. Routing live construction can't be verified offline. | Low value / rig-required |
-| Port `trigger_alarm` / `reset_alarm` to plugins | Protocol + sampler timing critical; the 2 of 19 step types still on legacy adapters. | Protocol-critical / rig-required |
-| **P6.3** remove legacy dispatch fallback + delete enum members | Trigger/reset still use the legacy path, so the fallback + enum must stay. | Blocked by the two above |
+| **P6.3** remove legacy dispatch fallback + delete enum members | All 19 step types now run from plugins, so the legacy `_exec_*` fallback is unused at runtime — but it's kept as a safety net until the trigger/reset port is rig-confirmed (B11). Removing the enum is a larger, riskier cleanup with little upside. | Deferred cleanup |
 | **P5.1 (optional)** further split of the *legacy* `Suite_Report.html` into widgets | The audience templates are widget-composed; the legacy report stays intact by design (FR-30a "Legacy" view). | Not needed |
 
 **Design patterns still unrealized (by choice):** rich `ExecutionContext` facade (today the
@@ -102,9 +102,13 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       with a Delay step still waits correctly during a real suite.
 - [x] **P3.1 (rest)** Ported input + navigation actions → `plugins/actions/` (click, right_click,
       hotkey, type_text, navigate_home/alarm_list/event_list/equipment_page) and **screenshot** →
-      `plugins/utilities/`. `actions` added to discovered categories. 11 tests. **trigger_alarm /
-      reset_alarm intentionally LEFT legacy** (protocol + sampler-timing critical — port only with
-      specific need). Net: **17/19 step types now run from plugins.**
+      `plugins/utilities/`. `actions` added to discovered categories. 11 tests.
+- [x] **P3.1 (protocol)** Ported **trigger_alarm / reset_alarm** → `plugins/actions/protocol.py`
+      (`@register(override=True)`). Replicates `_exec_trigger_alarm`/`_exec_reset_alarm` exactly: signal
+      via the runner's protocol handler FIRST, record trigger/reset timestamps on the exec-context, then
+      start the frame sampler immediately (timing-critical order preserved). Legacy `_exec_*` kept as
+      fallback. 7 tests (incl. signal-before-sampler ordering, skip-without-point). Net: **19/19 step
+      types now run from plugins** (0 legacy adapters active after discovery). *Awaiting rig confirm (B11).*
 - [~] **P3.2 (started)** Decompose verifications: orchestration moves into a capability, OCR work stays
       in `ISCSVerifier` behind a `VerificationBackend` (FR-13, `iscs_core/backends.py` — structural, no
       change to ISCSVerifier). **verify_alarm_panel** ported → `plugins/verifications/verify_alarm_panel.py`
@@ -213,18 +217,21 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 | **0 — Safety net** | ✅ pytest harness (8/8), golden fixtures, coverage gate live |
 | **1 — Registry & contracts** | ✅ capability registry is the live dispatch path (legacy adapters + fallback) |
 | **2 — Wiring & events** | ✅ lifecycle events (runner + suite); report + recorder are event subscribers. *P2.1 DI live-wiring deferred — low value.* |
-| **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID registered, no if/elif). *trigger_alarm/reset_alarm intentionally legacy (protocol-critical).* |
+| **3 — Capabilities out of the engine** | ✅ **19/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions + **trigger_alarm/reset_alarm**; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID, no if/elif). Legacy `_exec_*` kept as fallback. *(trigger/reset port awaiting rig confirm — B11.)* |
 | **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
 | **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker + **composable widgets (P5.1)** — HTML templates are now widget config. *PDF needs `pip install fpdf2`.* |
 | **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3) + **optional-dep load manifest (P6.2)** — dependency probes + LoadManifest, report-only at startup. *P6.3 enum/fallback removal still intentionally deferred (trigger/reset legacy).* |
 
-**Total: 241 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
+**Total: 253 tests passing** (PDF test runs when `fpdf2` is installed), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
 
 ### Live-validated at the SCADA rig
-- ✅ **Core path re-validated after the 2026-06-23 repair**: trigger → verify → reset → consolidated report.
+- ✅ **Core path**: trigger → verify → reset → consolidated report.
 - ✅ Confirmed: DELAY plugin · report-as-subscriber · recorder-as-subscriber · alarm-panel/normalize/
-  **list/event/equipment/custom verifications** · P6.3 arbitrary-step (`example_noop`) · **📊 report UI picker**.
-- ⏳ Not yet separately exercised: nav actions (run a flow that navigates).
+  **list/event/equipment/custom verifications** · **nav + screenshot actions** · P6.3 arbitrary-step
+  (`example_noop`) · **📊 report UI picker** (incl. Legacy + ordered list) · visual palette + Type-Text
+  toggle · **Summary PDF** (multi-fail fix). All previously-pending Phase B items + code fixes confirmed.
+- ⏳ Awaiting a rig run: **B11 — `trigger_alarm`/`reset_alarm` plugin port** (last capability port; verify
+  alarms still fire/clear and detection timing is unchanged).
 
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
 P4.2 `is_applicable` · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).

@@ -9,16 +9,17 @@ before changing anything further.
 
 - ✅ **LIVE-CONFIRMED at the rig:** Phase A core path (trigger→verify→reset→report) ·
   B1 DELAY plugin · B2 report-as-subscriber · B3 recorder-as-subscriber ·
-  B5 alarm-panel/normalize/list/event/equipment/custom verifications · B7 arbitrary
-  step (`example_noop`) · B8 📊 report UI picker.
-- ⏳ **CODE DONE, still awaiting a rig run:** B6 nav/screenshot actions (run a flow that
-  navigates) · B9 visual palette + Type-Text toggle · B10 PDF (after `pip install fpdf2`).
+  B5 alarm-panel/normalize/list/event/equipment/custom verifications · B6 nav/screenshot
+  actions · B7 arbitrary step (`example_noop`) · B8 📊 report UI picker · B9 visual palette +
+  Type-Text toggle · B10 PDF. **All previously-pending Phase B items are validated + code-fixed.**
+- ⏳ **CODE DONE, awaiting a rig run:** **B11 — `trigger_alarm`/`reset_alarm` ported to plugins**
+  (see below). This is the last capability port; validate that alarms still fire/clear and detection
+  timing is unchanged.
 - 🟢 **Offline-only — NO rig step needed** (additive, covered by tests; just confirm
   Phase A still passes): P3.4 `BindingResolver` · P5.1 report widgets · P6.2 load
-  manifest · the duplicate-schema-block cleanup.
-- ⏸️ **DEFERRED — only relevant if you choose to do them at the rig:** B4 DI wiring
-  (P2.1) · porting `trigger_alarm`/`reset_alarm` (protocol-critical). See
-  `MIGRATION_CHECKLIST.md` for why.
+  manifest · duplicate-schema-block cleanup · PDF multi-fail fix + Legacy report in the picker.
+- ⏸️ **DEFERRED — only relevant if you choose to do it at the rig:** B4 DI wiring (P2.1).
+  See `MIGRATION_CHECKLIST.md` for why.
 
 ---
 
@@ -158,6 +159,20 @@ Order is chosen so the smallest, safest cutover proves the pattern first.
    - [ ] Run a flow: `Click here` then a plain `Type Text` (no own click) behaves as expected
 
 10. **B10 — PDF report (needs `pip install fpdf2`).** After installing, generate "Summary PDF" from the 📊 picker.
+
+11. **B11 — Port `trigger_alarm` / `reset_alarm` to plugins (final Phase 3 port).** ⏳ CODE DONE — validate now.
+    `plugins/actions/protocol.py` (`TriggerAlarmAction` / `ResetAlarmAction`, `@register(override=True)`)
+    replicates the legacy `_exec_trigger_alarm` / `_exec_reset_alarm` exactly: send the signal via the
+    runner's protocol handler FIRST, record trigger/reset timestamps on the exec-context, then start the
+    frame sampler immediately. Legacy `_exec_*` methods are kept as the fallback.
+    **Validate at the rig:**
+    - [ ] At launch, console lists `plugins/actions: [... 'protocol' ...]`.
+    - [ ] Run a suite — each point's alarm still **fires** (Modbus write) and the alarm panel verifies
+          the same PASS/FAIL as before.
+    - [ ] Each point **resets/normalizes** the same; the **Normalize** check still populates.
+    - [ ] Detection timing is unchanged (sampler still catches the alarm/normal transition).
+    - [ ] **19/19 step types now run from plugins** — confirm nothing on the run path regressed.
+    - Revert if off: delete `plugins/actions/protocol.py` → the legacy `_exec_trigger/reset` path resumes.
 
 > After each B-step: run a suite, confirm the checklist item, and commit. If a step
 > misbehaves, revert that step (`git checkout -- <files>`) and report — nothing else
