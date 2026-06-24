@@ -42,6 +42,19 @@ def test_unknown_template_raises():
         rt.render_html("nope", RAW)
 
 
+def test_dict_input_gives_clear_error_not_attributeerror():
+    # Regression: picking a generated Results.json ({"points": [...]}) instead of a
+    # suite_results.json (a list) used to fail with a cryptic
+    # "'str' object has no attribute 'get'" deep in normalize_results.
+    bad = {"title": "T", "summary": {"total": 1}, "points": [{"id": "P1", "overall": "PASS"}]}
+    with pytest.raises(ValueError) as ei:
+        rt.render_html("management", bad)
+    assert "suite_results.json" in str(ei.value)
+    # also on the PDF/write path
+    with pytest.raises(ValueError):
+        rt.generate_template_report("pdf", bad, ".")
+
+
 # ── management summary ────────────────────────────────────────────────────────
 
 def test_management_renders_kpis_and_pass_rate():

@@ -27,7 +27,23 @@ from typing import Any, Callable, Dict, List
 # ── data layer ────────────────────────────────────────────────────────────────
 
 def _normalize(raw_results: List[dict]) -> List[dict]:
-    """Build the normalized view via the existing, golden-tested normalizer."""
+    """Build the normalized view via the existing, golden-tested normalizer.
+
+    Validates the input shape first: a suite's raw results are a *list* of record
+    dicts. A common mistake is feeding a dict — e.g. picking a generated
+    ``Results.json`` (``{"title","summary","points"}``) instead of the run's
+    ``suite_results.json`` — which otherwise fails deep inside the normalizer with
+    a cryptic ``'str' object has no attribute 'get'``. Fail early with guidance."""
+    if isinstance(raw_results, dict):
+        hint = (" This looks like a generated report's Results.json - pick the "
+                "run's suite_results.json instead.") if "points" in raw_results else ""
+        raise ValueError(
+            "Report input must be a list of raw result records (a suite_results.json), "
+            f"but got a JSON object (dict).{hint}")
+    if not isinstance(raw_results, list):
+        raise ValueError(
+            "Report input must be a list of raw result records (a suite_results.json), "
+            f"but got {type(raw_results).__name__}.")
     from iscs_reports import ReportManager      # lazy import avoids any import cycle
     return ReportManager.normalize_results(raw_results)
 
