@@ -157,12 +157,19 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - [x] **P5 templates (audience set complete)** Added **Engineering** (full per-point step traces) and
       a **JSON** data export (FR-30f) → templates: management / engineering / audit / json. 9 tests;
       samples in `samples/`. CLI: `--template engineering|json`.
-- [x] **P5 UI picker** (code done, awaiting live confirm) — 📊 button in the Suite panel opens a dialog
-      to generate any template (Management/Engineering/Audit/JSON) from the last run's
-      `suite_results.json` (or a chosen file) and opens it. `SuitePanel._open_report_picker`.
-- [x] **P5 PDF renderer** — `render_pdf` (via `fpdf2`, a binary `write` template) added as a 5th picker
-      option "Summary PDF". Requires `pip install fpdf2`; without it the picker shows a clear install
-      message. 3 tests (registration always; generation skips if fpdf2 absent).
+- [x] **P5 UI picker** — 📊 button in the Suite panel opens a dialog to generate any template from the
+      last run's `suite_results.json` (or a chosen file) and opens it. `SuitePanel._open_report_picker`.
+      The list is ordered **Legacy → Audit → Engineering → Management → Summary PDF → Results JSON**
+      (HTML reports first, then PDF, then JSON). **Legacy** regenerates/opens the original
+      `Suite_Report.html` (`render_legacy` delegates to `ReportManager`; the picker opens the existing
+      run-time report if present rather than re-rendering with duration 0).
+- [x] **P5 PDF renderer** — `render_pdf` (via `fpdf2`, a binary `write` template) is the "Summary PDF"
+      picker option. Requires `pip install fpdf2`; without it the picker shows a clear install message.
+      **Fixed:** multi-failed-point reports crashed fpdf2 with "Not enough horizontal space to render a
+      single character" — `multi_cell` defaults `new_x=RIGHT`, leaving the cursor at the right margin so
+      the next full-width cell got ~0 width; now uses `new_x=LMARGIN` + `wrapmode="CHAR"` + per-row
+      fallback. Also `_normalize` now rejects a non-list input (e.g. a mis-picked `Results.json`) with a
+      clear error instead of a cryptic `'str' object has no attribute 'get'`.
 - [x] **P5.1** Composable, self-describing report **widgets** (FR-30c/FR-30d) — `iscs_report_templates`
       now has a `ReportWidget` base + `register/get/list_widget` registry + `ResultView` (FR-30e data
       layer) + 7 built-in widgets (header / kpis / failures_by_category / failed_points / summary_line /

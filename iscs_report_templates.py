@@ -342,13 +342,47 @@ def render_pdf(records: List[dict], meta: Dict[str, Any], path) -> None:
     fails = [r for r in records if r.get("overall") == "FAIL"]
     if fails:
         for r in fails:
-            pdf.multi_cell(0, 5, _pdf_text(
+            line = _pdf_text(
                 f"{r.get('id')}  [{r.get('scenario_name')}]  "
-                f"{r.get('failure_category')}: {r.get('failure_reason')}"))
+                f"{r.get('failure_category')}: {r.get('failure_reason')}")
+            # Reset x to the left margin first: multi_cell defaults new_x=RIGHT, so
+            # without this the *next* full-width multi_cell would get ~0 width and
+            # fpdf2 raises "Not enough horizontal space to render a single
+            # character". new_x=LMARGIN keeps the cursor at the left edge; CHAR
+            # wrap lets a long unbroken token (e.g. raw OCR text) break by char.
+            pdf.set_x(pdf.l_margin)
+            try:
+                pdf.multi_cell(0, 5, line, new_x="LMARGIN", new_y="NEXT",
+                               wrapmode="CHAR")
+            except Exception:
+                # Never let one row kill the whole report — truncate and continue.
+                pdf.set_x(pdf.l_margin)
+                pdf.cell(0, 5, _pdf_text(line[:110]), new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.cell(0, 6, "   None", new_x="LMARGIN", new_y="NEXT")
 
     pdf.output(str(path))
+
+
+def render_legacy(records: List[dict], meta: Dict[str, Any], path) -> None:
+    """Regenerate the original full **Suite_Report.html** (the built-in "Legacy"
+    view, FR-30a) from the same results, by delegating to `ReportManager` so the
+    layout is identical to the run-time report. Writes into the suite folder.
+
+    Times aren't stored in `suite_results.json`, so a re-render uses 0 (duration
+    shows 0); the picker prefers an already-present Suite_Report.html over a
+    re-render, so the original run's report is what you normally see."""
+    from iscs_reports import ReportManager
+    out_dir = Path(path).parent
+    evidence = ReportManager._scan_evidence_files(out_dir)
+    # _write_html_report expects datetime objects (it subtracts them and calls
+    # strftime). suite_results.json doesn't store run times, so a re-render uses
+    # "now" for both → duration shows 0:00:00.
+    now = datetime.datetime.now()
+    start = meta.get("start_ts") or now
+    end = meta.get("end_ts") or now
+    ReportManager._write_html_report(records, out_dir, start, end,
+                                     meta.get("title", "Test Run"), evidence)
 
 
 # ── registry (FR-30, FR-30b) ──────────────────────────────────────────────────
@@ -356,26 +390,30 @@ def render_pdf(records: List[dict], meta: Dict[str, Any], path) -> None:
 # HTML templates are pure composition config — an ordered ``widgets`` list (FR-30c).
 # Adding/reordering a section, or adding a whole template, needs no engine change.
 # json/pdf are format-specific renderers (FR-30f) and keep their own hooks.
+# `order` controls the picker list (HTML reports first, then PDF, then JSON).
 TEMPLATES: Dict[str, Dict[str, Any]] = {
-    "management":  {"name": "Management Summary", "audience": "management",
-                    "filename": "Management_Summary.html",
-                    "widgets": ["header", "kpis", "failures_by_category", "failed_points"]},
-    "engineering": {"name": "Engineering Report", "audience": "engineering",
-                    "filename": "Engineering_Report.html",
-                    "widgets": ["header", "summary_line", "step_traces"]},
-    "audit":       {"name": "Audit Record", "audience": "audit",
+    "legacy":      {"name": "Legacy Report (Original)", "audience": "full", "order": 10,
+                    "filename": "Suite_Report.html", "write": render_legacy},
+    "audit":       {"name": "Audit Record", "audience": "audit", "order": 20,
                     "filename": "Audit_Report.html",
                     "widgets": ["header", "audit_attempts"]},
-    "json":        {"name": "Results JSON", "audience": "data",
-                    "filename": "Results.json", "render": render_json},
-    "pdf":         {"name": "Summary PDF", "audience": "print",
+    "engineering": {"name": "Engineering Report", "audience": "engineering", "order": 30,
+                    "filename": "Engineering_Report.html",
+                    "widgets": ["header", "summary_line", "step_traces"]},
+    "management":  {"name": "Management Summary", "audience": "management", "order": 40,
+                    "filename": "Management_Summary.html",
+                    "widgets": ["header", "kpis", "failures_by_category", "failed_points"]},
+    "pdf":         {"name": "Summary PDF", "audience": "print", "order": 50,
                     "filename": "Summary_Report.pdf", "write": render_pdf},
+    "json":        {"name": "Results JSON", "audience": "data", "order": 60,
+                    "filename": "Results.json", "render": render_json},
 }
 
 
 def list_templates() -> List[Dict[str, str]]:
-    return [{"key": k, "name": v["name"], "audience": v["audience"]}
-            for k, v in sorted(TEMPLATES.items())]
+    """Templates in display order (HTML reports first, then PDF, then JSON)."""
+    items = sorted(TEMPLATES.items(), key=lambda kv: (kv[1].get("order", 999), kv[0]))
+    return [{"key": k, "name": v["name"], "audience": v["audience"]} for k, v in items]
 
 
 def render_html(template_key: str, raw_results: List[dict],

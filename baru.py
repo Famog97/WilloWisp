@@ -4417,10 +4417,24 @@ class SuitePanel(tk.Frame):
 
         def _gen():
             try:
-                raw = json.loads(results_path.read_text(encoding="utf-8"))
-                out = rpt.generate_template_report(
-                    choice.get(), raw, results_path.parent,
-                    title=self.title_var.get().strip() or "Test Run")
+                key = choice.get()
+                # Legacy = the original Suite_Report.html. If the run already
+                # produced one, just open it (it has the real run times/evidence);
+                # only re-generate if it's missing.
+                if key == "legacy":
+                    existing = results_path.parent / "Suite_Report.html"
+                    if existing.exists():
+                        out = existing
+                    else:
+                        raw = json.loads(results_path.read_text(encoding="utf-8"))
+                        out = rpt.generate_template_report(
+                            key, raw, results_path.parent,
+                            title=self.title_var.get().strip() or "Test Run")
+                else:
+                    raw = json.loads(results_path.read_text(encoding="utf-8"))
+                    out = rpt.generate_template_report(
+                        key, raw, results_path.parent,
+                        title=self.title_var.get().strip() or "Test Run")
                 self.app._log(f"📊 Report generated: {out.name}")
                 dlg.destroy()
                 try:

@@ -18,7 +18,33 @@ RAW = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 def test_template_registry_lists_audiences():
     keys = {t["key"] for t in rt.list_templates()}
-    assert {"management", "engineering", "audit", "json", "pdf"} <= keys
+    assert {"legacy", "management", "engineering", "audit", "json", "pdf"} <= keys
+
+
+def test_template_list_is_ordered_html_then_pdf_then_json():
+    # Picker order: Legacy + HTML reports first, then PDF, then JSON.
+    order = [t["key"] for t in rt.list_templates()]
+    assert order == ["legacy", "audit", "engineering", "management", "pdf", "json"]
+
+
+def test_legacy_template_regenerates_suite_report(tmp_path):
+    out = rt.generate_template_report("legacy", RAW, tmp_path, title="Legacy")
+    assert out.name == "Suite_Report.html"
+    assert "<html" in out.read_text(encoding="utf-8").lower()
+
+
+def test_pdf_handles_multiple_failed_points(tmp_path):
+    # Regression: >1 failed point used to crash with "Not enough horizontal space
+    # to render a single character" because multi_cell left the cursor at the
+    # right margin (new_x defaults to RIGHT).
+    pytest.importorskip("fpdf", reason="PDF export needs fpdf2 (pip install fpdf2)")
+    raw = [{"point_id": f"P{i}", "overall": "FAIL", "loop_num": 1,
+            "scenario_name": f"Scenario {i}",
+            "steps": [{"step": "verify_alarm_panel", "status": "FAIL",
+                       "msg": ("Z" * 300 if i == 1 else "mismatch")}]}
+           for i in range(4)]
+    out = rt.generate_template_report("pdf", raw, tmp_path, title="Multi-fail")
+    assert out.exists() and out.read_bytes()[:4] == b"%PDF"
 
 
 def test_engineering_renders_full_step_traces():
