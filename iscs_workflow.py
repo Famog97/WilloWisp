@@ -710,52 +710,6 @@ def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], d
     return d
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  FLOW SCHEMA VERSIONING  (FR-27)
-# ═════════════════════════════════════════════════════════════════════════════
-# Persisted flows carry a schema_version so older/newer saved data can coexist.
-# Bump FLOW_SCHEMA_VERSION when the on-disk shape changes and register a migrator
-# keyed by the version it upgrades FROM. Migrators are applied in sequence until
-# the dict reaches the current version (Chain of Responsibility).
-FLOW_SCHEMA_VERSION = 1
-
-# {from_version: callable(dict) -> dict}. Empty today (v1 is the first version);
-# the mechanism is in place so a future v1→v2 change is a one-line addition.
-_FLOW_MIGRATORS: Dict[int, Callable[[dict], dict]] = {}
-
-
-def register_flow_migrator(from_version: int, fn: Callable[[dict], dict]) -> None:
-    """Register a migrator that upgrades a flow dict FROM `from_version` to the next."""
-    _FLOW_MIGRATORS[from_version] = fn
-
-
-def _migrate_flow_dict(d: dict, migrators: Optional[Dict[int, Callable[[dict], dict]]] = None,
-                       current: int = FLOW_SCHEMA_VERSION) -> dict:
-    """Upgrade a persisted flow dict to the current schema version.
-
-    - Missing schema_version is treated as the current version (legacy data saved
-      before versioning is, by definition, in the current shape).
-    - A version newer than this app supports raises a clear error (don't silently
-      mangle data written by a newer build).
-    """
-    migrators = _FLOW_MIGRATORS if migrators is None else migrators
-    version = d.get("schema_version", current)
-    if not isinstance(version, int):
-        version = current
-    if version > current:
-        raise ValueError(
-            f"Flow schema_version {version} is newer than supported ({current}). "
-            f"Upgrade the application to load this flow."
-        )
-    while version < current:
-        migrator = migrators.get(version)
-        if migrator is None:
-            raise ValueError(f"No migrator registered to upgrade flow schema from v{version}.")
-        d = migrator(d)
-        version += 1
-    return d
-
-
 class ProcedureFlow:
     """
     Ordered, configurable list of Procedure steps for a scenario.
