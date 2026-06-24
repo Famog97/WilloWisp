@@ -24,6 +24,11 @@ from .registry import (
     using_registry,
 )
 from .discovery import discover_directory, discover_package, discover_entry_points
+from .manifest import (
+    LoadManifest, CapabilityLoad, evaluate_requirements,
+    register_dependency, dependency_status, missing_requirements,
+    list_dependencies, importable,
+)
 from .backends import VerificationBackend
 from .events import (
     Event, EventBus, bus,
@@ -38,6 +43,9 @@ __all__ = [
     "StepStatus", "DuplicateCapabilityError", "UnknownCapabilityError",
     "registry", "register", "using_registry",
     "discover_directory", "discover_package", "discover_entry_points",
+    "LoadManifest", "CapabilityLoad", "evaluate_requirements",
+    "register_dependency", "dependency_status", "missing_requirements",
+    "list_dependencies", "importable",
     "VerificationBackend",
     "Event", "EventBus", "bus",
     "SuiteStarted", "SuiteCompleted", "CardStarted", "CardCompleted",

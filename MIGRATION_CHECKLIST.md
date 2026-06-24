@@ -37,7 +37,8 @@ core infra (registry / EventBus / DI container / discovery).
   Phase 5 UI picker / Engineering / PDF / JSON / widget split P5.1 all DONE.)
 
 **Not done — cleanup, only after the above:**
-- P6.2 optional-dependency manifest · P6.3 remove legacy dispatch fallback + delete enum members.
+- P6.3 remove legacy dispatch fallback + delete enum members (intentionally deferred — trigger/reset
+  still legacy). *(P6.2 optional-dependency manifest — DONE.)*
 
 **Design patterns still unrealized:** rich `ExecutionContext` facade (currently the `LegacyExecContext`
 bridge) · `BaseCapability` template-method · `is_applicable` Specification.
@@ -184,7 +185,16 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       `register_asset_migrator`, `_migrate_assets_dict`; `save()` tags the file, `_load()` migrates
       first and degrades gracefully (logs, starts empty) on a too-new file. Self-contained (no
       iscs_core dep — keeps the asset store standalone). 6 tests.
-- [ ] **P6.2** Generalize optional-dependency handling into the registry load manifest
+- [x] **P6.2** Generalize optional-dependency handling into a registry **load manifest** (FR-18/FR-19,
+      retires R10). New `iscs_core/manifest.py`: a **dependency-probe registry** (`register_dependency`/
+      `dependency_status`/`missing_requirements` + built-in `importable` probes for ocr/tesseract/assets/
+      pyautogui/pil/cv2/pymodbus/keyboard/pandas/fpdf2/screeninfo) and a **`LoadManifest`** (loaded /
+      unavailable / failed + reason, `summary()` for startup logging). `discover_directory` gained an
+      optional `manifest=` param (records each loaded cap + each failed import). `evaluate_requirements`
+      checks each cap's `meta.requires` against the probes and records unmet ones; `disable=True` opt-in
+      unregisters them (FR-18 "disable just that capability"). `baru._load_plugins()` builds the manifest
+      at startup and prints one diagnostic block — **report-only (disable=False)**, so live behavior is
+      unchanged. 10 tests.
 - [x] **P6.3 (decoupling done)** Procedure no longer bound to the `ProcedureType` enum: unknown/plugin
       keys resolve to `_DynamicProcType` (quacks like an enum member — `.value`/`.name`, value
       equality) so they round-trip + execute via the registry. `from_dict` KEEPS unknown keys (was:
@@ -204,9 +214,9 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 | **3 — Capabilities out of the engine** | ✅ **17/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID registered, no if/elif). *trigger_alarm/reset_alarm intentionally legacy (protocol-critical).* |
 | **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
 | **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker + **composable widgets (P5.1)** — HTML templates are now widget config. *PDF needs `pip install fpdf2`.* |
-| **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3 — arbitrary plugin step keys add/save/load/run). *P6.2 optional-dep manifest todo.* |
+| **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3) + **optional-dep load manifest (P6.2)** — dependency probes + LoadManifest, report-only at startup. *P6.3 enum/fallback removal still intentionally deferred (trigger/reset legacy).* |
 
-**Total: 231 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
+**Total: 241 tests passing** (1 skipped — PDF, needs fpdf2), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
 
 ### Live-validated at the SCADA rig
 - ✅ **Core path re-validated after the 2026-06-23 repair**: trigger → verify → reset → consolidated report.
@@ -215,8 +225,7 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 - ⏳ Not yet separately exercised: nav actions (run a flow that navigates).
 
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
-P4.2 `is_applicable` · P6.2 optional-dep manifest · P2.1 DI live-wiring · port trigger_alarm/reset_alarm
-(deferred, protocol-critical).
+P4.2 `is_applicable` · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).
 
 > ⚠️ **2026-06-23 repair note:** accidental edits deleted `iscs_core/container.py` (was untracked) and reverted
 > the capability bridge / event wiring in `iscs_workflow.py` + `baru.py`. All restored; 204 tests pass; core

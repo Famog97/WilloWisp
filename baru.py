@@ -87,6 +87,21 @@ except Exception as _ce:
     _CORE_EVENTS_OK = False
     print(f"INFO: iscs_core events unavailable — lifecycle events disabled. ({_ce})")
 
+# ── Capability load manifest (optional; FR-18/FR-19 — diagnostics only) ────────
+try:
+    from iscs_core import (
+        LoadManifest, evaluate_requirements,
+        registry as CORE_REGISTRY,
+    )
+    _CORE_MANIFEST_OK = True
+except Exception:
+    LoadManifest = evaluate_requirements = CORE_REGISTRY = None
+    _CORE_MANIFEST_OK = False
+
+# Populated by _load_plugins(): the single startup snapshot of what loaded /
+# what's unavailable (unmet requirements) / what failed to import (FR-19).
+PLUGIN_MANIFEST = None
+
 
 # Plugin categories discovered at startup (extend as capabilities are ported out
 # of the engine). Each discovered file self-registers, overriding its legacy
@@ -96,17 +111,32 @@ _PLUGIN_CATEGORIES = ("utilities", "verifications", "actions")
 
 def _load_plugins():
     """Discover ported capability plugins at app startup. Best-effort and isolated:
-    a broken plugin is logged + skipped, never blocking launch."""
+    a broken plugin is logged + skipped, never blocking launch.
+
+    Also builds the capability load manifest (FR-18/FR-19): what loaded, what has
+    unmet requirements, and what failed to import — printed once for diagnostics.
+    Capabilities with unmet requirements are reported, NOT disabled (the live
+    engine keeps its legacy fallback), so this is purely additive."""
     if discover_directory is None:
         return
+    global PLUGIN_MANIFEST
+    manifest = LoadManifest() if _CORE_MANIFEST_OK else None
     base = Path(__file__).parent / "plugins"
     for category in _PLUGIN_CATEGORIES:
         try:
-            loaded = discover_directory(base / category)
+            loaded = discover_directory(base / category, manifest=manifest)
             if loaded:
                 print(f"INFO: loaded plugin(s) from plugins/{category}: {loaded}")
         except Exception as _pe:
             print(f"WARNING: plugin discovery failed for plugins/{category}: {_pe}")
+
+    if manifest is not None and CORE_REGISTRY is not None:
+        manifest.record_registry(CORE_REGISTRY)          # include legacy adapters
+        unavailable = evaluate_requirements(CORE_REGISTRY, manifest, disable=False)
+        PLUGIN_MANIFEST = manifest
+        print("INFO: " + manifest.summary().replace("\n", "\n      "))
+        if unavailable:
+            print(f"INFO: capabilities with unmet requirements (left enabled): {unavailable}")
 
 
 def _wire_subscribers():

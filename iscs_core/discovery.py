@@ -22,7 +22,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import List, Optional, Union
 
-from .registry import CapabilityRegistry, using_registry
+from .registry import CapabilityRegistry, registry as _global_registry, using_registry
 
 logger = logging.getLogger(__name__)
 
@@ -31,27 +31,53 @@ def _ctx(into: Optional[CapabilityRegistry]):
     return using_registry(into) if into is not None else nullcontext()
 
 
+def _effective(into: Optional[CapabilityRegistry]) -> CapabilityRegistry:
+    """The registry a bare ``@register()`` will actually land in (FR-19 manifest
+    needs to know which keys a module added)."""
+    return into if into is not None else _global_registry
+
+
+def _record_new_caps(manifest, reg: CapabilityRegistry, before: set, source: str) -> None:
+    """Record capabilities newly present after a module import as loaded (FR-19)."""
+    for key in sorted(set(reg.keys()) - before):
+        try:
+            cat = reg.get(key).meta.category
+        except Exception:
+            cat = ""
+        manifest.record_loaded(key, category=cat, source=source)
+
+
 def discover_directory(path: Union[str, Path],
-                       into: Optional[CapabilityRegistry] = None) -> List[str]:
+                       into: Optional[CapabilityRegistry] = None,
+                       manifest=None) -> List[str]:
     """Import every top-level ``*.py`` file in ``path`` (files starting with ``_``
     are skipped). Returns the stems of the modules that imported successfully.
-    A module that raises on import is logged and skipped (NFR-11)."""
+    A module that raises on import is logged and skipped (NFR-11).
+
+    If ``manifest`` is given, records each capability a file added as ``loaded``
+    and each failed file as ``failed`` (with the reason) for FR-19 diagnostics."""
     path = Path(path)
     loaded: List[str] = []
     if not path.is_dir():
         return loaded
+    reg = _effective(into)
     with _ctx(into):
         for py in sorted(path.glob("*.py")):
             if py.name.startswith("_"):
                 continue
             mod_name = f"_wisp_plugin_{py.stem}"
+            before = set(reg.keys()) if manifest is not None else set()
             try:
                 spec = importlib.util.spec_from_file_location(mod_name, py)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)   # type: ignore[union-attr]
                 loaded.append(py.stem)
-            except Exception:
+                if manifest is not None:
+                    _record_new_caps(manifest, reg, before, source=str(py))
+            except Exception as e:
                 logger.exception("Failed to load plugin file %s", py)
+                if manifest is not None:
+                    manifest.record_failed(py.stem, f"{type(e).__name__}: {e}", source=str(py))
     return loaded
 
 
