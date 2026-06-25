@@ -1,5 +1,11 @@
 # CLAUDE.md — WilloWisp codebase guide
 
+> **Full rebuild-from-scratch spec:** [`SYSTEM_BLUEPRINT.md`](SYSTEM_BLUEPRINT.md) —
+> a single self-contained document (data models, file formats, algorithms, the step
+> catalogue, protocol/OCR/verification details, config keys) detailed enough to
+> recreate the whole app with no other input. This file is the quick guide; the
+> blueprint is the brain.
+
 Orientation for anyone (human or agent) working in this repo. Companion docs:
 [`ARCHITECTURE_DESIGN.md`](ARCHITECTURE_DESIGN.md) (north-star design),
 [`ARCHITECTURE_REQUIREMENTS.md`](ARCHITECTURE_REQUIREMENTS.md) (FR/NFR),
