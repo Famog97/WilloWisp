@@ -19,6 +19,13 @@ match  = baru._ocr_contains
 fuzzy  = baru._ocr_fuzzy_contains
 
 
+def test_ocr_initialize_bad_path_returns_false_without_raising():
+    # Regression: initialize() used shutil.whois (nonexistent) for the PATH
+    # fallback, raising AttributeError when the configured path was wrong.
+    import iscs_OCR
+    assert iscs_OCR.initialize("does-not-exist-tesseract") is False
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  _ocr_canon — canonicalization
 # ──────────────────────────────────────────────────────────────────────────────

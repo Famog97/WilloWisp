@@ -377,27 +377,6 @@ class Procedure:
         # not dropped — they round-trip and execute via the registry, or surface a
         # clear ERROR at runtime if nothing handles them.
         proc_type = _resolve_proc_type(raw)
-        raw = d.get("proc_type")
-        if not raw:
-            return None                      # malformed entry (no type) — drop
-        # P6.3: unknown keys are KEPT as a dynamic type (a plugin may provide them),
-        # not dropped — they round-trip and execute via the registry, or surface a
-        # clear ERROR at runtime if nothing handles them.
-        proc_type = _resolve_proc_type(raw)
-        raw = d.get("proc_type")
-        if not raw:
-            return None                      # malformed entry (no type) — drop
-        # P6.3: unknown keys are KEPT as a dynamic type (a plugin may provide them),
-        # not dropped — they round-trip and execute via the registry, or surface a
-        # clear ERROR at runtime if nothing handles them.
-        proc_type = _resolve_proc_type(raw)
-        raw = d.get("proc_type")
-        if not raw:
-            return None                      # malformed entry (no type) — drop
-        # P6.3: unknown keys are KEPT as a dynamic type (a plugin may provide them),
-        # not dropped — they round-trip and execute via the registry, or surface a
-        # clear ERROR at runtime if nothing handles them.
-        proc_type = _resolve_proc_type(raw)
         try:
             category = ProcedureCategory(d["category"])
         except (ValueError, KeyError):

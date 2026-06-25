@@ -43,7 +43,7 @@ def initialize(tesseract_cmd: str) -> bool:
     path_exists = tesseract_cmd and os.path.exists(tesseract_cmd)
     globally_available = False
     if not path_exists:
-        found_in_path = _shutil.whois(tesseract_cmd or "tesseract")
+        found_in_path = _shutil.which(tesseract_cmd or "tesseract")
         if found_in_path:
             resolved_cmd = found_in_path
             globally_available = True
