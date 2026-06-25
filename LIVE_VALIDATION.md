@@ -12,14 +12,15 @@ before changing anything further.
   B5 alarm-panel/normalize/list/event/equipment/custom verifications · B6 nav/screenshot
   actions · B7 arbitrary step (`example_noop`) · B8 📊 report UI picker · B9 visual palette +
   Type-Text toggle · B10 PDF. **All previously-pending Phase B items are validated + code-fixed.**
-- ⏳ **CODE DONE, awaiting a rig run:** **B11 — `trigger_alarm`/`reset_alarm` ported to plugins**
-  (see below). This is the last capability port; validate that alarms still fire/clear and detection
-  timing is unchanged.
+- ✅ **LIVE-CONFIRMED (latest):** **B11 — `trigger_alarm`/`reset_alarm` ported to plugins.** Alarms still
+  fire/clear and detection timing is unchanged. **All 19/19 step types now run from plugins, validated.**
 - 🟢 **Offline-only — NO rig step needed** (additive, covered by tests; just confirm
   Phase A still passes): P3.4 `BindingResolver` · P5.1 report widgets · P6.2 load
   manifest · duplicate-schema-block cleanup · PDF multi-fail fix + Legacy report in the picker.
 - ⏸️ **DEFERRED — only relevant if you choose to do it at the rig:** B4 DI wiring (P2.1).
   See `MIGRATION_CHECKLIST.md` for why.
+
+**→ Phase B is fully validated. The migration is complete; only the optional/deferred items remain.**
 
 ---
 
@@ -160,7 +161,7 @@ Order is chosen so the smallest, safest cutover proves the pattern first.
 
 10. **B10 — PDF report (needs `pip install fpdf2`).** After installing, generate "Summary PDF" from the 📊 picker.
 
-11. **B11 — Port `trigger_alarm` / `reset_alarm` to plugins (final Phase 3 port).** ⏳ CODE DONE — validate now.
+11. **B11 — Port `trigger_alarm` / `reset_alarm` to plugins (final Phase 3 port).** ✅ LIVE-CONFIRMED.
     `plugins/actions/protocol.py` (`TriggerAlarmAction` / `ResetAlarmAction`, `@register(override=True)`)
     replicates the legacy `_exec_trigger_alarm` / `_exec_reset_alarm` exactly: send the signal via the
     runner's protocol handler FIRST, record trigger/reset timestamps on the exec-context, then start the

@@ -18,8 +18,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⏸️ **DEFERRED** (see re
 - **Phase 1** registry & contracts — capability registry is the live dispatch path (legacy adapters + fallback).
 - **Phase 2** events — lifecycle events (runner + suite); report + recorder are event subscribers.
 - **Phase 3** capabilities out of the engine — **19/19 step types run from plugins** (all 7 verifications
-  + a `VerificationBackend`, all input/nav/screenshot actions, and **`trigger_alarm`/`reset_alarm`**);
-  **P3.4 `BindingResolver`** (TEXT/IMAGE/HYBRID). *(trigger/reset port code-done, awaiting a rig run — B11.)*
+  + a `VerificationBackend`, all input/nav/screenshot actions, and **`trigger_alarm`/`reset_alarm`** —
+  rig-confirmed); **P3.4 `BindingResolver`** (TEXT/IMAGE/HYBRID).
 - **Phase 4** dynamic UI & discovery — registry-extensible Add-Step palette (P4.1) + plugin discovery (P4.3).
 - **Phase 5** reporting — templates (Management/Engineering/Audit/JSON/PDF) + raw-results persisted + 📊 UI
   picker + **composable widgets (P5.1)** over a `ResultView` data layer.
@@ -108,7 +108,7 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       via the runner's protocol handler FIRST, record trigger/reset timestamps on the exec-context, then
       start the frame sampler immediately (timing-critical order preserved). Legacy `_exec_*` kept as
       fallback. 7 tests (incl. signal-before-sampler ordering, skip-without-point). Net: **19/19 step
-      types now run from plugins** (0 legacy adapters active after discovery). *Awaiting rig confirm (B11).*
+      types now run from plugins** (0 legacy adapters active after discovery). **Rig-confirmed (B11).**
 - [~] **P3.2 (started)** Decompose verifications: orchestration moves into a capability, OCR work stays
       in `ISCSVerifier` behind a `VerificationBackend` (FR-13, `iscs_core/backends.py` — structural, no
       change to ISCSVerifier). **verify_alarm_panel** ported → `plugins/verifications/verify_alarm_panel.py`
@@ -230,8 +230,8 @@ Goal: regression coverage of current behavior so later phases can prove equivale
   **list/event/equipment/custom verifications** · **nav + screenshot actions** · P6.3 arbitrary-step
   (`example_noop`) · **📊 report UI picker** (incl. Legacy + ordered list) · visual palette + Type-Text
   toggle · **Summary PDF** (multi-fail fix). All previously-pending Phase B items + code fixes confirmed.
-- ⏳ Awaiting a rig run: **B11 — `trigger_alarm`/`reset_alarm` plugin port** (last capability port; verify
-  alarms still fire/clear and detection timing is unchanged).
+- ✅ **B11 — `trigger_alarm`/`reset_alarm` plugin port** confirmed (alarms fire/clear, timing unchanged).
+  **All Phase B items validated — the capability migration is fully live-confirmed, 19/19 step types.**
 
 ### Remaining (all OPTIONAL / need-driven — nothing on the critical path)
 P4.2 `is_applicable` · P2.1 DI live-wiring · port trigger_alarm/reset_alarm (deferred, protocol-critical).
