@@ -138,6 +138,20 @@ def _load_plugins():
         if unavailable:
             print(f"INFO: capabilities with unmet requirements (left enabled): {unavailable}")
 
+    # Coverage check (P6.3): confirm every step type resolves in the registry, so
+    # the legacy _exec_* fallback is provably vestigial. Guarded — never blocks launch.
+    try:
+        from iscs_workflow import registry_step_coverage
+        covered, missing = registry_step_coverage()
+        if missing:
+            print(f"WARNING: {len(missing)} step type(s) have no registered capability "
+                  f"(legacy fallback would be used): {missing}")
+        else:
+            print(f"INFO: registry covers all {len(covered)} step types "
+                  f"(legacy fallback inactive).")
+    except Exception:
+        pass
+
 
 def _wire_subscribers():
     """Subscribe event-driven subsystems to the shared bus at startup (P2.3).

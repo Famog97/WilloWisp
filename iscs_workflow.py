@@ -301,6 +301,25 @@ else:   # pragma: no cover - exercised only when core absent
         return None
 
 
+def registry_step_coverage(reg: "Optional[CapabilityRegistry]" = None):
+    """Diagnostic (FR-19 / NFR-9): which ``ProcedureType`` step keys resolve in
+    ``reg`` (defaults to the global capability registry). Returns
+    ``(covered, missing)`` lists of enum values.
+
+    After startup discovery every value should be covered — by a plugin or, as a
+    safety net, a ``LegacyCapabilityAdapter`` — which proves the direct legacy
+    ``_exec_*`` fallback in ``_execute_procedure`` is vestigial. A non-empty
+    ``missing`` means a step type would fall through to the legacy executor."""
+    reg = reg if reg is not None else core_registry
+    covered, missing = [], []
+    for proc_type in ProcedureType:
+        if reg is not None and reg.has(proc_type.value):
+            covered.append(proc_type.value)
+        else:
+            missing.append(proc_type.value)
+    return covered, missing
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  PROCEDURE  DATACLASS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1469,6 +1488,14 @@ class ProcedureRunner:
                 fn = getattr(self, method_name) if method_name else None
                 if fn is None:
                     raise NotImplementedError(f"No executor for {proc.proc_type}")
+                # The legacy executor is a deliberate safety net. When the registry
+                # is present but had no capability for this key, that's a degraded
+                # state (missing/failed plugin) worth surfacing (NFR-9). When the
+                # registry is absent (iscs_core unavailable) this is expected
+                # pure-legacy mode, so we stay quiet.
+                if core_registry is not None:
+                    log(f"⚠ no registered capability for {proc.proc_type.value!r} — "
+                        f"using legacy executor (check plugin discovery)")
                 status, verify_results, screenshot = fn(proc, ctx, sampler_ok, log)
 
         except Exception as exc:

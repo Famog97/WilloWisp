@@ -32,7 +32,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⏸️ **DEFERRED** (see re
 |---|---|---|
 | **P4.2** `auto_register` via `is_applicable` | Poor fit: `auto_register_procedures` builds steps with bespoke params/`enabled`/`depends_on`/order; FR-21 would relocate that into capabilities for little gain, and it rewrites the live default-flow generator. The Specification pattern stays unrealized by choice. | Low value / poor fit |
 | **P2.1** DI live-wiring | Verifier/runner are per-card with runtime args; protocols are already a registry. `Container` exists + is tested; wiring adds indirection for little gain. Routing live construction can't be verified offline. | Low value / rig-required |
-| **P6.3** remove legacy dispatch fallback + delete enum members | All 19 step types now run from plugins, so the legacy `_exec_*` fallback is unused at runtime — but it's kept as a safety net until the trigger/reset port is rig-confirmed (B11). Removing the enum is a larger, riskier cleanup with little upside. | Deferred cleanup |
+| **P6.3** *delete* the enum + `_exec_*` methods + fallback | The legacy path is now **proven vestigial and instrumented** (startup coverage log + a ⚠ warning if ever hit) — but kept as a deliberate degradation safety net (used if `iscs_core` is unavailable). The enum still backs `auto_register`, the UI catalogue, and many `== ProcedureType.X` checks, so deleting it is high-risk / low-upside. | Deferred cleanup (instrumented, not deleted) |
 | **P5.1 (optional)** further split of the *legacy* `Suite_Report.html` into widgets | The audience templates are widget-composed; the legacy report stays intact by design (FR-30a "Legacy" view). | Not needed |
 
 **Design patterns still unrealized (by choice):** rich `ExecutionContext` facade (today the
@@ -205,8 +205,17 @@ Goal: regression coverage of current behavior so later phases can prove equivale
       keys resolve to `_DynamicProcType` (quacks like an enum member — `.value`/`.name`, value
       equality) so they round-trip + execute via the registry. `from_dict` KEEPS unknown keys (was:
       dropped), `_on_add` + `_dynamic_catalogue` accept arbitrary keys. Demo: `example_noop` (non-enum)
-      adds → saves → loads → runs via `ExampleNoOpAction`. 9 tests. **Not done (and not desirable yet):**
-      deleting the enum / removing the legacy fallback — trigger_alarm/reset_alarm still use it.
+      adds → saves → loads → runs via `ExampleNoOpAction`. 9 tests.
+- [x] **P6.3 (legacy path proven vestigial + loud — safe finish)** Now that all 19 step types run from
+      plugins (and legacy adapters cover every enum key in the registry), the direct legacy `_exec_*`
+      fallback in `_execute_procedure` is never reached in normal operation. Added `registry_step_coverage()`
+      (returns covered/missing enum keys); `baru._load_plugins()` logs *"registry covers all 19 step types
+      (legacy fallback inactive)"* at startup. If the fallback IS ever hit while the registry is present
+      (a missing/failed plugin), `_execute_procedure` now logs a clear ⚠ warning (NFR-9). 6 tests.
+      **Intentionally NOT done (high-risk, low-upside):** deleting the `ProcedureType` enum / removing the
+      `_exec_*` methods + fallback. They're a deliberate degradation safety net (used if `iscs_core` is
+      unavailable) and the enum still backs `auto_register`, the UI catalogue, and many `== ProcedureType.X`
+      checks. The legacy path stays — now provably vestigial and instrumented rather than deleted.
 
 ---
 
@@ -220,9 +229,9 @@ Goal: regression coverage of current behavior so later phases can prove equivale
 | **3 — Capabilities out of the engine** | ✅ **19/19 step types run from plugins** — all 7 verifications (capability + `VerificationBackend`) + all input/nav/screenshot actions + **trigger_alarm/reset_alarm**; **P3.4 `BindingResolver` done** (TEXT/IMAGE/HYBRID, no if/elif). Legacy `_exec_*` kept as fallback. *(trigger/reset port awaiting rig confirm — B11.)* |
 | **4 — Dynamic UI & discovery** | ✅ registry-extensible Add-Step palette (P4.1) + plugin discovery/startup (P4.3). *P4.2 is_applicable deferred — low value.* |
 | **5 — Reporting layers** | ✅ templates (Management/Engineering/Audit/JSON/**PDF**) + raw-results persisted + 📊 UI picker + **composable widgets (P5.1)** — HTML templates are now widget config. *PDF needs `pip install fpdf2`.* |
-| **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3) + **optional-dep load manifest (P6.2)** — dependency probes + LoadManifest, report-only at startup. *P6.3 enum/fallback removal still intentionally deferred (trigger/reset legacy).* |
+| **6 — Versioning & hardening** | ✅ schema versioning (flows + assets, P6.1/b) + enum decoupling (P6.3) + **optional-dep load manifest (P6.2)** + **legacy path proven vestigial & instrumented (P6.3 finish)** — startup coverage log + loud ⚠ fallback warning. *Deleting the enum/fallback intentionally not done — kept as a degradation safety net.* |
 
-**Total: 253 tests passing** (PDF test runs when `fpdf2` is installed), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
+**Total: 259 tests passing** (PDF test runs when `fpdf2` is installed), coverage ~37% (gate 18). Repo: `C:\Repo-Gitlab\willowisp`, branch `2-new-update-on-modules`.
 
 ### Live-validated at the SCADA rig
 - ✅ **Core path**: trigger → verify → reset → consolidated report.
