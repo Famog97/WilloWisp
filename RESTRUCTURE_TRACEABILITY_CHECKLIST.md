@@ -18,6 +18,15 @@
 
 **Legacy-file fates:** all six are **retired in M6** once empty (shims removed).
 
+**Tracking protocol:** tick a function box here **first** (the moment its logic is relocated),
+then — only once every box in a migration phase is `[x]` — tick that phase in
+[`RESTRUCTURE_MIGRATION.md`](RESTRUCTURE_MIGRATION.md).
+
+> **Status (2026-06-26): all boxes unticked — correct.** **M0 is complete** but moved **no
+> code** (it is the safety net: characterization goldens, CI guards, empty skeleton, the B2
+> baseline). Per-function relocation — and therefore the first ticks below — **begins at M1**
+> (first up: `BaseProtocol` → `core/ports/protocol.py`).
+
 ---
 
 ## 1. `baru.py` (7,663 L) → split across core + adapters; **retired M6**
