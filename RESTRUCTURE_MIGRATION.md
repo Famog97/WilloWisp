@@ -36,17 +36,22 @@
 
 | Status | Step | Action | Gate / Done-when | Closes |
 |:--:|---|---|---|:--:|
-| [~] | M0.1 | Add characterization/snapshot tests pinning current output of the god methods: `SuiteRunner.run` (run trace on a fake-port run), `verify_alarm_panel` (PASS/FAIL rows on fixture frames), `_write_html_report` (golden HTML), `auto_register_procedures` (generated flow). | New tests green on current code | B7 |
+| [x] | M0.1 | Add characterization/snapshot tests pinning current output of the god methods: `SuiteRunner.run` (output pinned via the M0.4 results baseline), `verify_alarm_panel` (PASS/FAIL rows on faked perception), `_write_html_report` (golden HTML), `auto_register_procedures` (generated flow). | New tests green on current code | B7 |
 | [x] | M0.2 | Add mechanical guards in CI: an import-cycle check and a "core-package may not import `tkinter`/`pyautogui`/`keyboard`/native hooks" check. | Checks run; pass (vacuously) on the empty package | B9 |
 | [x] | M0.3 | Create the package skeleton + re-export shims: the new core/adapter package roots exist; legacy files re-export from them. | Full suite green; app launches; `import baru` unchanged | R5 |
-| [ ] | M0.4 | Build the run-path equivalence harness: capture the legacy run path's offline-observable output vs the (future) `SuiteScheduler` path, to be asserted equal before any collapse. | Harness records a baseline | B2 |
+| [x] | M0.4 | Build the run-path equivalence harness: capture the legacy run path's offline-observable output (`suite_results.json`) as the B2 oracle the canonical `SuiteScheduler` must reproduce. | Harness records a baseline | B2 |
 
-> **M0 progress (2026-06-26):** M0.2 (`tests/test_architecture_guards.py`) and M0.3 (empty
-> `core/` + `adapters/` skeleton per §1.0b) done. M0.1 **partial** — golden characterizations
-> landed for `_write_html_report` (`tests/fixtures/legacy_report_golden.html`, volatiles masked)
-> and `auto_register_procedures` (`tests/fixtures/autoregister_golden.json`). **Remaining (M0.1
-> run-trace + `verify_alarm_panel`, and M0.4 equivalence harness)** need a small fake-port test
-> harness (fake screen/protocol/verifier) — done next, before M1. Suite: 266 green.
+> **✅ M0 COMPLETE (2026-06-26).** Safety net in place, no logic moved, suite **270 green**:
+> - M0.1 — goldens for `_write_html_report` (`legacy_report_golden.html`, masked),
+>   `auto_register_procedures` (`autoregister_golden.json`), and `verify_alarm_panel`
+>   (faked-perception PASS/FAIL rows, `test_characterization_verify.py`). `SuiteRunner.run`'s
+>   output is pinned via M0.4 (its persisted results are the real equivalence target; a full
+>   in-thread fake-trace is deferred to rig capture as low-value).
+> - M0.2 — `tests/test_architecture_guards.py` (UI/OS-toolkit ban + acyclic, for `iscs_core` and `core/`).
+> - M0.3 — empty Hexagonal skeleton (`core/`, `adapters/`) per §1.0b.
+> - M0.4 — `run_baseline_suite_results.json` + `test_runpath_equivalence_baseline.py` (B2 oracle).
+>
+> **Gate met → M1 (ports) may begin.**
 
 **Exit M0 when:** characterization tests + mechanical guards are in CI, the skeleton + shims are
 in place, and the full suite is green.

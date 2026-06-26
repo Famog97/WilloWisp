@@ -1,0 +1,460 @@
+[
+  {
+    "id": "BUCS-AMS-ACU-OCC-0008",
+    "overall": "PASS",
+    "loop_num": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS",
+    "screenshot": "C:\\Repo-Gitlab\\willowisp\\test_logs\\suite_20260623_191023\\loop_0001\\1_AMS\\0000_BUCS-AMS-ACU-OCC-0008_alarm_panel_trigger_PASS.png",
+    "failure_category": "None",
+    "failure_reason": "",
+    "steps": [
+      {
+        "name": "Datetime",
+        "status": "PASS",
+        "message": "23/06/2026 19:10:25 (sync delta=1.07s)"
+      },
+      {
+        "name": "Identifier",
+        "status": "PASS",
+        "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+      },
+      {
+        "name": "Description",
+        "status": "PASS",
+        "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+      },
+      {
+        "name": "Value",
+        "status": "PASS",
+        "message": "'ALARM' found in OCR."
+      },
+      {
+        "name": "Severity",
+        "status": "PASS",
+        "message": "'1' found in OCR."
+      },
+      {
+        "name": "Color",
+        "status": "PASS",
+        "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+      },
+      {
+        "name": "Datetime",
+        "status": "PASS",
+        "message": "23/06/2026 19:10:30 (sync delta=0.08s)"
+      },
+      {
+        "name": "Identifier",
+        "status": "PASS",
+        "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+      },
+      {
+        "name": "Value",
+        "status": "PASS",
+        "message": "'NORMAL' found in OCR."
+      },
+      {
+        "name": "Severity",
+        "status": "PASS",
+        "message": "'0' found in OCR."
+      },
+      {
+        "name": "Color",
+        "status": "PASS",
+        "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+      }
+    ],
+    "sections": [
+      {
+        "label": "🚨 Alarm Panel",
+        "trigger": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:25 (sync delta=1.07s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+          },
+          {
+            "name": "Description",
+            "status": "PASS",
+            "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'ALARM' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'1' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+          }
+        ],
+        "normalize": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:30 (sync delta=0.08s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'NORMAL' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'0' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+          }
+        ],
+        "overall": "PASS"
+      },
+      {
+        "label": "📋 Alarm List",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      },
+      {
+        "label": "📅 Event List",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      },
+      {
+        "label": "🖥 Equipment Page",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      }
+    ],
+    "failure_diagnostics": null,
+    "trigger_info": {
+      "trigger_time": "2026-06-23 19:10:23.931",
+      "trigger_value": "N/A",
+      "point_id": "BUCS-AMS-ACU-OCC-0008"
+    },
+    "rerun_attempt": 0,
+    "attempts": [
+      {
+        "attempt": 0,
+        "overall": "PASS",
+        "screenshot": "C:\\Repo-Gitlab\\willowisp\\test_logs\\suite_20260623_191023\\loop_0001\\1_AMS\\0000_BUCS-AMS-ACU-OCC-0008_alarm_panel_trigger_PASS.png",
+        "failure_category": "None",
+        "failure_reason": "",
+        "steps": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:25 (sync delta=1.07s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+          },
+          {
+            "name": "Description",
+            "status": "PASS",
+            "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'ALARM' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'1' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+          },
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:30 (sync delta=0.08s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0008' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'NORMAL' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'0' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+          }
+        ],
+        "failure_diagnostics": null,
+        "trigger_info": {
+          "trigger_time": "2026-06-23 19:10:23.931",
+          "trigger_value": "N/A",
+          "point_id": "BUCS-AMS-ACU-OCC-0008"
+        }
+      }
+    ]
+  },
+  {
+    "id": "BUCS-AMS-ACU-OCC-0007",
+    "overall": "PASS",
+    "loop_num": 1,
+    "scenario_idx": 1,
+    "scenario_name": "AMS",
+    "screenshot": "C:\\Repo-Gitlab\\willowisp\\test_logs\\suite_20260623_191023\\loop_0001\\1_AMS\\0001_BUCS-AMS-ACU-OCC-0007_alarm_panel_trigger_PASS.png",
+    "failure_category": "None",
+    "failure_reason": "",
+    "steps": [
+      {
+        "name": "Datetime",
+        "status": "PASS",
+        "message": "23/06/2026 19:10:33 (sync delta=0.14s)"
+      },
+      {
+        "name": "Identifier",
+        "status": "PASS",
+        "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+      },
+      {
+        "name": "Description",
+        "status": "PASS",
+        "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+      },
+      {
+        "name": "Value",
+        "status": "PASS",
+        "message": "'ALARM' found in OCR."
+      },
+      {
+        "name": "Severity",
+        "status": "PASS",
+        "message": "'1' found in OCR."
+      },
+      {
+        "name": "Color",
+        "status": "PASS",
+        "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+      },
+      {
+        "name": "Datetime",
+        "status": "PASS",
+        "message": "23/06/2026 19:10:38 (sync delta=0.84s)"
+      },
+      {
+        "name": "Identifier",
+        "status": "PASS",
+        "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+      },
+      {
+        "name": "Value",
+        "status": "PASS",
+        "message": "'NORMAL' found in OCR."
+      },
+      {
+        "name": "Severity",
+        "status": "PASS",
+        "message": "'0' found in OCR."
+      },
+      {
+        "name": "Color",
+        "status": "PASS",
+        "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+      }
+    ],
+    "sections": [
+      {
+        "label": "🚨 Alarm Panel",
+        "trigger": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:33 (sync delta=0.14s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+          },
+          {
+            "name": "Description",
+            "status": "PASS",
+            "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'ALARM' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'1' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+          }
+        ],
+        "normalize": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:38 (sync delta=0.84s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'NORMAL' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'0' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+          }
+        ],
+        "overall": "PASS"
+      },
+      {
+        "label": "📋 Alarm List",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      },
+      {
+        "label": "📅 Event List",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      },
+      {
+        "label": "🖥 Equipment Page",
+        "trigger": [],
+        "normalize": [],
+        "overall": "SKIP"
+      }
+    ],
+    "failure_diagnostics": null,
+    "trigger_info": {
+      "trigger_time": "2026-06-23 19:10:33.144",
+      "trigger_value": "N/A",
+      "point_id": "BUCS-AMS-ACU-OCC-0007"
+    },
+    "rerun_attempt": 0,
+    "attempts": [
+      {
+        "attempt": 0,
+        "overall": "PASS",
+        "screenshot": "C:\\Repo-Gitlab\\willowisp\\test_logs\\suite_20260623_191023\\loop_0001\\1_AMS\\0001_BUCS-AMS-ACU-OCC-0007_alarm_panel_trigger_PASS.png",
+        "failure_category": "None",
+        "failure_reason": "",
+        "steps": [
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:33 (sync delta=0.14s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+          },
+          {
+            "name": "Description",
+            "status": "PASS",
+            "message": "'Medium Level Security Door : Intrusion Alarm' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'ALARM' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'1' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color RED (255, 0, 0) detected (blink detected)."
+          },
+          {
+            "name": "Datetime",
+            "status": "PASS",
+            "message": "23/06/2026 19:10:38 (sync delta=0.84s)"
+          },
+          {
+            "name": "Identifier",
+            "status": "PASS",
+            "message": "'BUCS-AMS-ACU-OCC-0007' found in OCR."
+          },
+          {
+            "name": "Value",
+            "status": "PASS",
+            "message": "'NORMAL' found in OCR."
+          },
+          {
+            "name": "Severity",
+            "status": "PASS",
+            "message": "'0' found in OCR."
+          },
+          {
+            "name": "Color",
+            "status": "PASS",
+            "message": "Alarm color GREEN (32, 169, 72) detected (blink detected)."
+          }
+        ],
+        "failure_diagnostics": null,
+        "trigger_info": {
+          "trigger_time": "2026-06-23 19:10:33.144",
+          "trigger_value": "N/A",
+          "point_id": "BUCS-AMS-ACU-OCC-0007"
+        }
+      }
+    ]
+  }
+]
