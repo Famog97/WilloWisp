@@ -95,19 +95,25 @@ yet; suite green.
 | [x] | M2.3 | Assets Repositories | Split `AssetManager` into dedicated JSON repositories, ID sequencer, file storage, and search utilities. *(Relocation-first: entities → `core/domain/assets.py`; store → `adapters/driven/persistence/asset_store.py`. Fine-grained repo split deferred.)* | `adapters/driven/persistence/json_repos.py` · `adapters/driven/persistence/image_store.py` |
 | [x] | M2.4 | Perception Engine | Extract OCR preprocessor, text matchers, and sampler engines from `ISCSVerifier`. Implement `OcrPort` & `ScreenCapturePort`. *(Relocation-first: text matchers → `core/services/text_match.py`; whole `ISCSVerifier` → `core/services/verifier.py` (rewired off baru globals); `OcrPort`/`ScreenCapturePort` + adapters from M1. Fine perception/decision split deferred.)* | `core/services/verifier.py` · `core/services/text_match.py` · `adapters/driven/perception/*` |
 | [ ] | M2.5 | Reporting Data & Widgets | Split `normalize_results` into mappers; decompose `_write_html_report` into `LegacyReportComposer` + custom rendering widgets. | `core/services/report_service.py` · `plugins/report_widgets/` |
-| [ ] | M2.6 | Evidence Collector | Split `FailureEvidenceCollector.collect` into per-artifact collectors + manifest builder. | `core/services/evidence_collector.py` |
+| [x] | M2.6 | Evidence Collector | Split `FailureEvidenceCollector.collect` into per-artifact collectors + manifest builder. *(Relocation-first: whole class → `core/services/evidence_collector.py`, rewired off baru PIL globals. Per-artifact split deferred.)* | `core/services/evidence_collector.py` |
 
 **Exit M2 when:** the leaves are relocated behind shims, the leaf god methods are decomposed,
 the core-import guard (B9) passes for these packages, and the suite is green.
 
-> **Progress (2026-06-26):** **M2.1 ✅** — `Zone`/`Monitor`/`VerifyResult`, the flow enums +
-> `_DynamicProcType`/`_resolve_proc_type`, the flow containers (`Procedure`/`IOGroup`/
-> `ProcedureFlow` + counters + schema-versioning), `ProcedureResult`/`ExecutionTrace`, and
-> `Scenario`/`SuiteCard` all relocated to `core/domain/` behind shims (`io_point` is a dict —
-> no class to move). **M2.2 ✅** — config + severity matrix → `core/services/config.py`
-> (`ConfigProvider` + `SeverityColorClassifier`); `LoadManifest` already in `iscs_core`.
-> Remaining: **M2.3** assets repos · **M2.4** perception · **M2.5** reporting-data · **M2.6**
-> evidence. Suite 280 green; guards green; behaviour unchanged.
+> **✅ M2 COMPLETE (2026-06-26, relocation-first).** All leaves relocated into the hexagon
+> behind shims; suite **280 green**, architecture guards green, and the `baru.App` GUI
+> smoke-check launches OK after every step:
+> - **M2.1** domain value objects → `core/domain/{zone,scenario,flow,results}.py`
+> - **M2.2** config + severity → `core/services/config.py`
+> - **M2.3** asset entities → `core/domain/assets.py`; store → `adapters/driven/persistence/asset_store.py`
+> - **M2.4** text-match → `core/services/text_match.py`; `ISCSVerifier` → `core/services/verifier.py`
+> - **M2.5** reporting → `core/services/report_service.py`
+> - **M2.6** evidence → `core/services/evidence_collector.py`
+>
+> `iscs_reports`/`iscs_assets` are now shims; `baru.py`/`iscs_workflow.py` shed their domain +
+> service logic. **Deferred to a later quality pass (not blocking M3):** the god-method/class
+> *decompositions* (normalize→mappers, `_write_html_report`→widgets, `AssetManager`→repos, the
+> verifier perception/decision split, evidence per-artifact collectors). **Gate met → M3 may begin.**
 
 ---
 

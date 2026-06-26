@@ -80,7 +80,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [~] `verify_list` (59) → `core/services/verifier.py` (`ListVerificationPolicy`)  — **relocated** (split deferred)
 
 ### 1.5 Evidence
-- [ ] `FailureEvidenceCollector.collect` (220) → **decompose** into `core/services/evidence_collector.py` (per-artifact collectors + manifest builder)
+- [~] `FailureEvidenceCollector.collect` (220) → `core/services/evidence_collector.py` — **M2.6 relocated** (whole class moved verbatim, rewired off baru PIL globals; baru shim; per-artifact-collector split deferred)
 
 ### 1.6 Run engines (→ one canonical path; legacy collapses, removed M6)
 - [ ] `SuiteRunner.__init__` / `_emit` / `stop` / `_sleep` / pause/resume/is_paused → `core/services/run_coordinator.py` (`SuiteExecutionThread` + `RunControl`)
