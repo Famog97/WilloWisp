@@ -57,6 +57,8 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 ### 1.3 Domain models
 - [x] `VerifyResult.__init__` / `to_dict` → `core/domain/results.py` — **M2.1 DONE** (baru shim)
 - [x] `Monitor.__init__` / `label` → `core/domain/scenario.py` — **M2.1 DONE** (baru shim)
+- [x] `Scenario.__init__` / `to_dict` / `from_dict` → `core/domain/scenario.py` — **M2.1 DONE** (baru shim; `WORKFLOW_AVAILABLE` guard dropped — `ProcedureFlow` is always core-available)
+- [x] `SuiteCard.__init__` / `from_card_cfg` / `from_direct` → `core/domain/scenario.py` — **M2.1 DONE** (baru shim)
 - [x] `Zone` (`__init__`, `width/height/cx/cy/contains`, `to_dict`, `from_dict`) → `core/domain/zone.py` — **M2.1 DONE** (pure geometry, R-HEX-3; baru shim)
 - [ ] `Scenario.__init__` / `to_dict` / `from_dict` → `core/domain/scenario.py`
 - [ ] `SuiteCard.__init__` / `from_card_cfg` / `from_direct` → `core/domain/scenario.py`

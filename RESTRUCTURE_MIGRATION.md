@@ -90,8 +90,8 @@ yet; suite green.
 
 | Status | Step | Cluster | Action / Legacy Extraction | Target Destination |
 |:--:|---|---|---|---|
-| [ ] | M2.1 | Domain Value Objects | Extract data models from legacy `baru.py` and `iscs_workflow.py` (no UI dependencies allowed). | `core/domain/scenario.py` · `core/domain/zone.py` · `core/domain/flow.py` · `core/domain/io_point.py` · `core/domain/results.py` |
-| [ ] | M2.2 | Config & Ambient | Convert `ConfigProvider`, `SeverityColorClassifier` (owns the matrix), and `LoadManifest` into injected singletons; remove module globals. | `core/services/` (shims left in legacy) |
+| [x] | M2.1 | Domain Value Objects | Extract data models from legacy `baru.py` and `iscs_workflow.py` (no UI dependencies allowed). | `core/domain/scenario.py` · `core/domain/zone.py` · `core/domain/flow.py` · `core/domain/io_point.py` · `core/domain/results.py` |
+| [x] | M2.2 | Config & Ambient | Convert `ConfigProvider`, `SeverityColorClassifier` (owns the matrix), and `LoadManifest` into injected singletons; remove module globals. | `core/services/` (shims left in legacy) |
 | [ ] | M2.3 | Assets Repositories | Split `AssetManager` into dedicated JSON repositories, ID sequencer, file storage, and search utilities. | `adapters/driven/persistence/json_repos.py` · `adapters/driven/persistence/image_store.py` |
 | [ ] | M2.4 | Perception Engine | Extract OCR preprocessor, text matchers, and sampler engines from `ISCSVerifier`. Implement `OcrPort` & `ScreenCapturePort`. | `adapters/driven/perception/tesseract_ocr.py` · `adapters/driven/perception/local_grab.py` |
 | [ ] | M2.5 | Reporting Data & Widgets | Split `normalize_results` into mappers; decompose `_write_html_report` into `LegacyReportComposer` + custom rendering widgets. | `core/services/report_service.py` · `plugins/report_widgets/` |
@@ -99,6 +99,15 @@ yet; suite green.
 
 **Exit M2 when:** the leaves are relocated behind shims, the leaf god methods are decomposed,
 the core-import guard (B9) passes for these packages, and the suite is green.
+
+> **Progress (2026-06-26):** **M2.1 ✅** — `Zone`/`Monitor`/`VerifyResult`, the flow enums +
+> `_DynamicProcType`/`_resolve_proc_type`, the flow containers (`Procedure`/`IOGroup`/
+> `ProcedureFlow` + counters + schema-versioning), `ProcedureResult`/`ExecutionTrace`, and
+> `Scenario`/`SuiteCard` all relocated to `core/domain/` behind shims (`io_point` is a dict —
+> no class to move). **M2.2 ✅** — config + severity matrix → `core/services/config.py`
+> (`ConfigProvider` + `SeverityColorClassifier`); `LoadManifest` already in `iscs_core`.
+> Remaining: **M2.3** assets repos · **M2.4** perception · **M2.5** reporting-data · **M2.6**
+> evidence. Suite 280 green; guards green; behaviour unchanged.
 
 ---
 
