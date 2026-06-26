@@ -27,6 +27,25 @@
   hexagon. Anything touching a window, widget, canvas, dialog, or OS input hook is a
   **UI Adapter** outside it. "Controllers" from v2 are reclassified accordingly (§1.0).
 
+### Feature-isolation rules — zero blast-radius extensibility (binding)
+Adding a feature must require **only new files or highly localized edits**, with zero spillover
+into existing code. Four registries are the **only** extension points (all already live from
+the plugin migration — see [`MIGRATION_CHECKLIST.md`](MIGRATION_CHECKLIST.md)); the design
+formalizes them and adds schema-driven UI generation:
+- **R-EXT-1 — Pluggable step types.** A new step type is **one file** in `plugins/` that
+  `@register`s a capability. The Flow editor and its parameter forms are **generated from the
+  capability's `params_schema`** (§1.7) — **zero edits to any GUI file**, for any UI.
+- **R-EXT-2 — Pluggable protocols.** A new industrial protocol is a `BaseProtocol`
+  implementation registered with `ProtocolManager`. The engine depends only on the interface,
+  resolved by key from the injected `ProtocolPort` — **zero edits to `SuiteScheduler`,
+  `PointRunCoordinator`, or any run unit**.
+- **R-EXT-3 — Pluggable report widgets.** A new report section is one self-contained
+  `ReportWidget` subclass + a `register_widget` call; templates are ordered widget lists —
+  **zero edits to the page shell or other widgets**.
+- **R-EXT-4 — Pluggable verification resolvers.** A new custom-verification method (e.g. an
+  OCR alternative, a vision-LLM) is one `BindingResolver` + a `register_binding_resolver` call
+  — **zero edits to the `verify_custom` capability or `BindingExecutor`**.
+
 ## Design rule
 
 ```
@@ -152,6 +171,10 @@ WilloWispCoreAPI                      # constructed once; injected with all core
   list_monitors() -> [MonitorInfo]    # via ScreenInfoPort (no GUI dependency)
   import_io_list(path, sheet, column_map) -> ProfileRef
   list_profiles() / load_profile(ref)
+  # capability catalogue — drives schema-generated UI (R-EXT-1)
+  list_step_types() -> [CapabilityMeta]          # key, name, category, params_schema, addable
+  get_param_schema(step_key) -> JSONSchema        # the form contract; UI renders generically
+  list_report_widgets() / list_binding_kinds() / list_protocols()
   # scenario authoring (pure data in/out — no widgets)
   get_scenario(id) / set_mode(id, mode)
   save_zones(id, [Zone]) / get_zones(id)         # Zone = pure geometry (R-HEX-3)
@@ -210,6 +233,31 @@ highest-risk unit, `RunController`, is split so it cannot accrete (see §5).
   test must pin its current output: `SuiteRunner.run` (run trace), `verify_alarm_panel`
   (PASS/FAIL rows on fixture frames), `_write_html_report` (golden HTML), and
   `auto_register_procedures` (the generated flow). These are gates, not part of this design.
+
+### 1.7 Extension points (zero blast radius) and schema-driven UI
+
+The **only** sanctioned way to extend behaviour is to register into one of four registries —
+all already live. Each is reached by the UI **only** through the facade catalogue methods
+(§1.2), so a new plugin is visible to **every** UI without GUI edits.
+
+| Extension | Registry / interface | Add a feature by | Untouched by construction |
+|---|---|---|---|
+| Step type (capability) | capability `registry` + `@register`, `CapabilityMeta` | one file in `plugins/` | engine, enum, dispatcher, **all GUI files** |
+| Protocol | `ProtocolManager` + `BaseProtocol` (`ProtocolPort`) | implement + register | `SuiteScheduler`, `PointRunCoordinator`, run units |
+| Report widget | `register_widget` + `ReportWidget` | one widget subclass | page shell, other widgets, templates |
+| Verification resolver | `register_binding_resolver` + `BindingResolver` | one resolver | `verify_custom`, `BindingExecutor` |
+
+**Schema-driven forms (R-EXT-1).** A capability declares `meta.params_schema` (a JSON schema:
+field name → {type, default, label, choices, …}). The facade exposes it via
+`get_param_schema(step_key)`. Each UI ships **one** generic **`SchemaFormRenderer`** (a UI
+adapter) that builds a form from any schema — so dropping in a plugin with new params yields a
+working editor with **zero GUI edits**, and the **same schema** renders as a Tk form, a Qt
+form, or an HTML form. This is the intersection of R-HEX (UI-agnostic contract) and R-EXT
+(zero blast radius): the parameter schema is the contract; the renderer is per-UI and generic.
+
+> **Guardrail:** no UI file may contain a per-step-type form. A hand-coded form for a specific
+> capability is an R-EXT-1 violation; the only permitted form code is the generic
+> `SchemaFormRenderer`.
 
 ---
 
@@ -450,6 +498,10 @@ flow-editor-ui: FlowTreeView(View) · FlowEditModel(Model) · StepEditController
 **Why/why-not:** editing logic separated from rendering → `FlowEditModel` is unit-testable
 (add/move/bulk-apply) with no Tk. `CheckAuthoringController` is the **single** owner of the
 cross-subsystem seam; the dialog no longer reaches into engine/asset internals directly.
+**Per-step parameter forms are NOT owned here:** the step editor delegates to the generic
+`SchemaFormRenderer` (§1.7), which builds the form from the capability's `params_schema` fetched
+via the facade. There is **no per-step-type form code** in the flow editor (R-EXT-1) — adding a
+plugin adds its editor for free, in any UI.
 
 ## 8. `OverlayWindow` (S2) — pure geometry (core) vs canvas (UI adapter)
 
@@ -588,6 +640,10 @@ The output contract is unchanged (already golden-tested); only the internal tran
 | R-HEX-2 abstract event marshalling | `EventDispatcher` port, UI-injected — §1.1, §1.4 |
 | R-HEX-3 pure coordinate models | `Zone`/`ZoneLayout`/`CoordinateModel` core vs `CanvasViewport`/canvas adapter — §8 |
 | R-HEX-4 boundary reclassification | Core-Service vs UI-Adapter table — §1.0 |
+| R-EXT-1 pluggable step types + schema UI | capability registry + `SchemaFormRenderer` — §1.7, §7 |
+| R-EXT-2 pluggable protocols | `ProtocolManager`/`BaseProtocol` behind `ProtocolPort` — §1.7, §4.4 |
+| R-EXT-3 pluggable report widgets | `register_widget`/`ReportWidget` — §1.7, §10.1 |
+| R-EXT-4 pluggable verification resolvers | `register_binding_resolver`/`BindingResolver` — §1.7, §9 |
 
 > **Next:** on re-audit ≥ ~85 (now including **B9**), the **Migration** phase orders these
 > units into shippable, test-gated steps (driven ports + core services first; the Tkinter

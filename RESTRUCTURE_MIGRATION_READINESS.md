@@ -256,6 +256,14 @@ judgement. Net: the boundary converts several **M/H** aggregation risks from "wa
   environment. **Verification:** a mechanical import check (core packages must not import any
   UI/OS-automation module) **and** a passing **headless CLI** drive of author→run→report with
   no GUI toolkit loaded.
+- **B10 — Zero-blast-radius extensibility.** The four extension registries (capabilities,
+  protocols, report widgets, verification resolvers) must be the **only** extension points, and
+  the Flow editor must build parameter forms from each capability's `params_schema` (no
+  per-step-type form code). **Largely already satisfied** by the completed plugin migration —
+  the residual work is the **schema-driven UI** (a single `SchemaFormRenderer`) and removing any
+  remaining hand-coded per-step forms. **Verification:** drop-in tests that add a dummy
+  capability / protocol / widget / resolver and assert *no existing file changed* and the
+  feature works (the new capability's editor renders from schema). **Risk: Low.**
 
 ---
 
@@ -292,13 +300,17 @@ redesign).
 8. **B9** — establish the strict Hexagonal UI boundary: a single `WilloWispCoreAPI` gate, an
    abstract `EventDispatcher`, pure coordinate models, driven ports for native capabilities,
    a core toolkit-import ban, and a headless CLI drive as proof.
+9. **B10** — confirm zero-blast-radius extensibility: the four registries are the only
+   extension points, parameter forms are schema-generated (no per-step UI code), proven by
+   drop-in tests. *(Largely met by the existing plugin migration — low residual.)*
 
-Once 1–8 are resolved, re-audit is expected to reach an approvable score (≥ ~85) and the
+Once 1–10 are resolved, re-audit is expected to reach an approvable score (≥ ~85) and the
 Migration phase can be authored.
 
 > **Note (post-audit):** Design **v3** (`RESTRUCTURE_DESIGN.md`) was revised to address
-> B1–B9 — including the Hexagonal boundary (§1.0–1.2), the App core/adapter split (§5), and
-> the geometry-vs-canvas split (§8). A re-audit against v3 is the next gate.
+> B1–B10 — including the Hexagonal boundary (§1.0–1.2), the four feature-isolation rules and
+> schema-driven UI (§1.7), the App core/adapter split (§5), and the geometry-vs-canvas split
+> (§8). A re-audit against v3 is the next gate.
 
 > No implementation, migration steps, or redesign produced — this audit only determines
 > readiness.

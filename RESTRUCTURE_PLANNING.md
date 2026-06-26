@@ -240,6 +240,12 @@ Any future decomposition must respect these. Marked **[HARD]** (non-negotiable) 
   supersession, and the startup load manifest must keep working unchanged.
 - **[HARD] Report compatibility.** The normalized result contract and the existing
   HTML/Excel/PDF/JSON outputs remain functionally equivalent.
+- **[HARD] Zero-blast-radius extensibility.** The four established extension registries
+  (capabilities, protocols, report widgets, verification resolvers) remain the **only** way
+  to extend behaviour: adding a step type / protocol / report section / verification method
+  must touch **only new files** (plus a one-line registration), with **no edits** to the
+  engine, run units, report layout, `verify_custom`, or — via schema-generated parameter
+  forms — **any GUI file**.
 - **[HARD] Runtime model.** Single-machine Windows desktop GUI; certain work must
   remain on the GUI main thread, other work on worker threads — the threading model
   cannot be casually changed.
@@ -340,6 +346,12 @@ design, stated as measurable thresholds.
   GUI toolkit loaded**, demonstrated by a minimal **CLI adapter** that imports the same core
   as the desktop app. *Why:* a passing headless path is the objective proof that the GUI is
   swappable (Web/PyQt/CLI) and that no business logic leaked into the UI.
+- **Zero blast-radius for the four extension types — verified by drop-in tests.** Adding a
+  capability, protocol, report widget, or verification resolver touches only new files, and a
+  new capability's parameter form appears in the UI with **no GUI edits** (schema-driven).
+  *Why:* localized, additive extension is the whole point of the registries; a test that drops
+  in a dummy plugin of each kind and asserts "no existing file changed, feature works" makes it
+  measurable.
 - **Full test suite green at every increment; live suite re-validated on the rig after
   any change to the run/perception path.** *Why:* the only backstops available given
   the untestable live path.
