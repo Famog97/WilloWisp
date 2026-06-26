@@ -154,12 +154,15 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 
 ## 3. `iscs_reports.py` (1,635 L) → `core/services/report_service.py` + `plugins/report_widgets/`; **retired M6**
 
-- [ ] `_size_label` (10) → `core/services/report_service.py`
-- [ ] `ReportManager.normalize_results` (213) → **decompose** `core/services/report_service.py` (`ResultNormalizer` = `ShapeRouter`+mappers+`FailureClassifier`+`AttemptAggregator`; **contract unchanged**, golden-gated)
-- [ ] `ReportManager.generate_reports` (23) / `on_suite_completed` (31) → `core/services/report_service.py` (`ReportService`, EventBus subscriber)
-- [ ] `ReportManager._scan_evidence_files` (35) / `_build_file_entry` (14) / `_inject_evidence_manifest` (3) → `core/services/report_service.py` (evidence indexing) — shareable with `evidence_collector.py`
-- [ ] `ReportManager._write_html_report` (1,128) → **decompose (B6)** `core/services/report_service.py` (`LegacyReportComposer` + `ReportPageShell`) + `plugins/report_widgets/` (`SummaryHeader`/`KpiPanel`/`FailureCategory`/`PerPointTrace`/`EvidenceGallery`/`RerunHistory` widgets over `ResultView`) — golden-HTML-gated (M0.1)
-- [ ] `ReportManager._write_excel_report` (134) → `core/services/report_service.py` (Excel renderer)
+> **M2.5 status:** the whole module is **relocated** to `core/services/report_service.py`
+> (verbatim, `iscs_reports` shim). The internal **decomposition** of `normalize_results` and
+> `_write_html_report` (the rewrites below) is a deferred refinement (M2.5 cont).
+- [x] `_size_label` (10) → `core/services/report_service.py` — **M2.5 relocated**
+- [~] `ReportManager.normalize_results` (213) → `core/services/report_service.py` — **relocated**; decomposition into `ResultNormalizer`/`ShapeRouter`/mappers deferred (contract golden-gated)
+- [x] `ReportManager.generate_reports` (23) / `on_suite_completed` (31) → `core/services/report_service.py` — **M2.5 relocated** (EventBus subscriber)
+- [x] `ReportManager._scan_evidence_files` (35) / `_build_file_entry` (14) / `_inject_evidence_manifest` (3) → `core/services/report_service.py` — **M2.5 relocated**
+- [~] `ReportManager._write_html_report` (1,128) → `core/services/report_service.py` — **relocated**; decompose (B6) into `LegacyReportComposer` + `plugins/report_widgets/` deferred (golden-HTML-gated, M0.1)
+- [x] `ReportManager._write_excel_report` (134) → `core/services/report_service.py` — **M2.5 relocated**
 
 ---
 
@@ -216,7 +219,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 |---|---:|---:|---:|:--:|
 | `baru.py` | ~150 methods / 30 classes | 4 (`BaseProtocol` M1.4; `Zone`/`Monitor`/`VerifyResult` M2.1) |  | [ ] |
 | `iscs_workflow.py` | ~120 methods / 20 classes | flow model: enums + `_DynamicProcType`/`_resolve_proc_type` + `Procedure`/`IOGroup`/`ProcedureFlow`/`ProcedureResult`/`ExecutionTrace` + counters/schema (M2.1) |  | [ ] |
-| `iscs_reports.py` | 8 methods | 0 |  | [ ] |
+| `iscs_reports.py` | 8 methods | whole module relocated to core/services/report_service.py (M2.5); iscs_reports is a shim |  | [ ] |
 | `iscs_assets.py` | ~60 methods / 11 classes | entity value objects (TextAsset/ImageAsset/Region/FlowTemplate/BindingType/StepBinding) → core/domain/assets.py (M2.3) |  | [ ] |
 | `iscs_OCR.py` | 5 functions | 0 |  | [ ] |
 | `iscs_recorder.py` | ~18 methods / 2 classes | 0 |  | [ ] |
