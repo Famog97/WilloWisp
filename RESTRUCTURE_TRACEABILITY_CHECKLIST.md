@@ -114,7 +114,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 ## 2. `iscs_workflow.py` (4,841 L) → split across core + UI; **retired M6**
 
 ### 2.1 Module-level helpers
-- [ ] `_resolve_proc_type` (8) / `_category_for` (8) / `_noop_log` (2) → `core/domain/flow.py`
+- [x] `_resolve_proc_type` (8) → `core/domain/flow.py` — **M2.1 DONE** (workflow shim) · [ ] `_category_for` (8) / `_noop_log` (2) → (stay engine-side / flow.py later)
 - [ ] `registry_step_coverage` (17) / `register_flow_migrator` (3) / `_migrate_flow_dict` (25) → `core/services/engine.py` (registry/coverage) + `core/domain/flow.py` (migration)
 - [ ] `_next_io_id` (4) / `_next_step_id` (4) → `core/domain/flow.py` (id sequencing)
 - [ ] `auto_register_procedures` (205) → **decompose** `core/services/import_service.py` (`DefaultFlowBuilder` + per-step `*Rule`s, FR-21) — gated by M0.1
@@ -125,7 +125,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `build_runner_from_scenario` (40) → `core/services/run_coordinator.py`
 
 ### 2.2 Flow data model & enums
-- [ ] `ProcedureCategory` / `ProcedureStatus` / `ProcedureType` / `_DynamicProcType` → `core/domain/flow.py`
+- [x] `ProcedureCategory` / `ProcedureStatus` / `ProcedureType` / `_DynamicProcType` → `core/domain/flow.py` — **M2.1 DONE** (workflow shim)
 - [ ] `Procedure.to_dict` / `from_dict` → `core/domain/flow.py`
 - [ ] `ProcedureResult` (`passed`/`failed`/`summary_line`) → `core/domain/results.py`
 - [ ] `ExecutionTrace` (`overall`/`total_duration_ms`/`_find`/`_status_prefix`/`flat_records`/`_collect_custom_checks`/`format_trace_log`) → `core/domain/results.py`
