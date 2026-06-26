@@ -1106,16 +1106,8 @@ class ProtocolManager:
             except: pass
 
 # ── Verify Result ─────────────────────────────────────────────────────────────
-class VerifyResult:
-    """Holds the result of one verification step (alarm panel, list, inspector)."""
-    def __init__(self, step: str, status: str, msg: str = "", screenshot: str = ""):
-        self.step       = step
-        self.status     = status
-        self.msg        = msg
-        self.screenshot = screenshot
-
-    def to_dict(self):
-        return {"step": self.step, "status": self.status, "msg": self.msg, "screenshot": self.screenshot}
+# M2.1: relocated to core/domain/results.py; re-exported here as a shim.
+from core.domain.results import VerifyResult
 
 # ── Report Generation Manager decoupled──────────────────────────────────────────────────
 # ── Shared OCR helpers (module-level so ISCSVerifier and OcrMonitorPanel both use them) ──
@@ -1585,18 +1577,8 @@ class ISCSVerifier:
 
 
 # ── Monitor & Zone Models ─────────────────────────────────────────────────────
-
-class Monitor:
-    def __init__(self, index, x, y, width, height, name=""):
-        self.index, self.x, self.y, self.width, self.height = index, x, y, width, height
-        self.name = name or f"Monitor {index + 1}"
-        match = re.search(r'\d+', self.name)
-        self.display_num = int(match.group()) if match else (index + 1)
-
-    @property
-    def label(self):
-        primary = " ★" if self.x == 0 and self.y == 0 else ""
-        return f"Display {self.display_num}{primary}  —  {self.width}×{self.height}  @ ({self.x}, {self.y})"
+# M2.1: Monitor + Zone relocated to core/domain/; re-exported here as shims.
+from core.domain.scenario import Monitor
 
 def detect_monitors():
     monitors = []
@@ -1628,34 +1610,7 @@ def match_physical_rect(monitor: "Monitor", phys_rects: list):
     if not phys_rects: return None
     return min(phys_rects, key=lambda r: abs(r[0] - monitor.x) + abs(r[1] - monitor.y))
 
-class Zone:
-    def __init__(self, x1, y1, x2, y2, zone_type="include", monitor_index=0):
-        self.x1, self.y1 = min(x1, x2), min(y1, y2)
-        self.x2, self.y2 = max(x1, x2), max(y1, y2)
-        self.zone_type = zone_type
-        self.label = ""
-        self.monitor_index = monitor_index  # which display this zone was drawn on
-
-    @property
-    def width(self):  return self.x2 - self.x1
-    @property
-    def height(self): return self.y2 - self.y1
-    @property
-    def cx(self): return self.x1 + self.width // 2
-    @property
-    def cy(self): return self.y1 + self.height // 2
-
-    def contains(self, x, y): return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
-
-    def to_dict(self):
-        return {"x1": self.x1, "y1": self.y1, "x2": self.x2, "y2": self.y2,
-                "type": self.zone_type, "label": self.label, "monitor_index": self.monitor_index}
-
-    @classmethod
-    def from_dict(cls, d):
-        z = cls(d["x1"], d["y1"], d["x2"], d["y2"], d["type"], d.get("monitor_index", 0))
-        z.label = d.get("label", "")
-        return z
+from core.domain.zone import Zone
 
 def generate_points(mode, monitor: Monitor, spacing: int, zones: list):
     valid, all_pts = [], []
