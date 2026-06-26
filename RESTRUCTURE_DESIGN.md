@@ -126,6 +126,36 @@ renders events:
 > **Rule of thumb:** if removing Tkinter would break it, it is a **UI Adapter**. If it would
 > still compile and pass tests headless, it is a **Core Service**.
 
+### 1.0b Physical directory structure (target)
+The logical units map onto this hexagonal package tree. It is the authoritative destination map
+for [`RESTRUCTURE_TRACEABILITY_CHECKLIST.md`](RESTRUCTURE_TRACEABILITY_CHECKLIST.md).
+```
+core/                                   # hexagon interior — NO ui/os-automation imports (B9)
+  ports/                                # outbound interfaces only
+    event_dispatcher.py · screen_capture.py · input_control.py · protocol.py · ocr.py
+  domain/                               # pure value objects (framework-agnostic geometry/data)
+    scenario.py · zone.py · flow.py · io_point.py · results.py · assets.py
+  services/                             # application services (UI-agnostic logic)
+    engine.py · verifier.py · run_coordinator.py · import_service.py · workspace.py
+    report_service.py · evidence_collector.py · config.py · protocol_manager.py
+  api.py                                # WilloWispCoreAPI — the single inbound gate
+
+adapters/
+  driven/                               # secondary adapters (the core depends on the PORT, not these)
+    persistence/  json_repos.py · image_store.py · metadata_store.py · suite_store.py
+    perception/   tesseract_ocr.py · local_grab.py        # OcrPort / ScreenCapturePort impls
+    input/        pyautogui_input.py                       # InputControlPort impl
+    protocol/     modbus.py · manager.py                   # ProtocolPort impls
+    recorder/     recorder.py
+  driving/                              # primary adapters (call WilloWispCoreAPI only)
+    cli/          main.py                                  # headless adapter (proves B9/B10)
+    ui_tkinter/   dispatcher.py · app_shell.py · renderer.py · views/ · components/
+
+plugins/                                # the four extension registries (R-EXT, already live)
+  actions/ · verifications/ · utilities/ · report_widgets/ · binding_resolvers/
+main.py                                 # selects a composition root (UI) and launches
+```
+
 ### 1.1 Lifecycle & thread-affinity model (with `EventDispatcher`)
 
 The core runs on background worker threads and **never** calls a UI toolkit. It hands every
