@@ -39,7 +39,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [x] `save_config` (7) → `core/services/config.py` (`ConfigProvider`) — **M2.2 DONE** (baru shim; `SEVERITY_MATRIX`/`APP_CONFIG` now backed by `core.services.config`; `SeverityColorClassifier` added for M2.4)
 - [ ] `init_test_run_log` (17) → `core/services/run_coordinator.py` (`EvidencePathManager`)
 - [ ] `_normalize` (3) → `core/services/report_service.py`
-- [ ] `_ocr_canon` (11) / `_ocr_contains` (20) / `_ocr_fuzzy_contains` (27) → `core/services/verifier.py` (`TextMatcher`)
+- [x] `_ocr_canon` (11) / `_ocr_contains` (20) / `_ocr_fuzzy_contains` (27) → `core/services/text_match.py` (`TextMatcher`) — **M2.4 DONE** (baru shim; tested by `test_ocr_match`)
 - [ ] `_find_state_table_cols` (20) / `_extract_states` (17) / `_get_state_indices` (19) / `_get_expected_for_value` (20) / `build_expected` (29) → `core/services/import_service.py` (IO-point expected-state derivation)
 - [ ] `db_session` (13) / `_metadata_get_db` (47) / `_migrate_columns` (12) / `_metadata_file_hash` (9) → `adapters/driven/persistence/metadata_store.py`
 - [ ] `_metadata_save_profile` (46) / `_metadata_list_profiles` (10) / `_metadata_load_profile` (27) / `_metadata_delete_profile` (8) → `adapters/driven/persistence/metadata_store.py`
