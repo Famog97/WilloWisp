@@ -969,15 +969,9 @@ class ColumnMapperDialog(tk.Toplevel):
         self.destroy()
 
 # ── Protocol Plugin System (Falani Architecture) ──────────────────────────────
-class BaseProtocol:
-    def __init__(self, config):
-        self.config = config
-        self.is_healthy = False
-    def start(self): pass
-    def stop(self): pass
-    def trigger_alarm(self, payload): raise NotImplementedError()
-    def reset_alarm(self, payload): raise NotImplementedError()
-    def check_health(self): return self.is_healthy
+# M1.4: BaseProtocol promoted to the Hexagonal port (core/ports/protocol.py).
+# Imported here as a shim so existing `ModbusProtocol(BaseProtocol)` is unchanged.
+from core.ports.protocol import ProtocolPort, BaseProtocol
 
 class ModbusProtocol(BaseProtocol):
     def __init__(self, config, log_callback=None):

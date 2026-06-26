@@ -64,14 +64,21 @@ in place, and the full suite is green.
 
 | Status | Step | Port / Interface | Target Destination | Action | Contract |
 |:--:|---|---|---|---|---|
-| [ ] | M1.1 | `EventDispatcher` | `core/ports/event_dispatcher.py` | Define abstract dispatch contract (R-HEX-2 threading boundary). Provide synchronous console implementation. | Thread-agnostic console runner |
-| [ ] | M1.2 | `ScreenCapturePort` | `core/ports/screen_capture.py` | Define screen-grabbing interface. | Abstract capture contract |
-| [ ] | M1.3 | `InputControlPort` | `core/ports/input_control.py` | Define input-control interface (clicks, keyboard). | Abstract OS automation contract |
-| [ ] | M1.4 | `ProtocolPort` | `core/ports/protocol.py` | Promote `BaseProtocol`/`ProtocolManager` to the port (already a registry — R-EXT-2). | Abstract industrial protocol contract |
-| [ ] | M1.5 | `OcrPort` | `core/ports/ocr.py` | Define abstract character-recognition interface. | Abstract OCR contract |
+| [x] | M1.1 | `EventDispatcher` | `core/ports/event_dispatcher.py` | Define abstract dispatch contract (R-HEX-2 threading boundary). Provide synchronous console implementation. | Thread-agnostic console runner |
+| [x] | M1.2 | `ScreenCapturePort` | `core/ports/screen_capture.py` | Define screen-grabbing interface. | Abstract capture contract |
+| [x] | M1.3 | `InputControlPort` | `core/ports/input_control.py` | Define input-control interface (clicks, keyboard). | Abstract OS automation contract |
+| [x] | M1.4 | `ProtocolPort` | `core/ports/protocol.py` | Promote `BaseProtocol`/`ProtocolManager` to the port (already a registry — R-EXT-2). | Abstract industrial protocol contract |
+| [x] | M1.5 | `OcrPort` | `core/ports/ocr.py` | Define abstract character-recognition interface. | Abstract OCR contract |
 
 **Exit M1 when:** all ports exist with local adapters + tests; nothing in the app imports them
 yet; suite green.
+
+> **✅ M1 COMPLETE (2026-06-26).** Five ports defined in `core/ports/` + a `SyncEventDispatcher`
+> reference impl; thin local driven adapters (`LocalScreenCapture`, `TesseractOcr`,
+> `PyAutoGuiInput`) wrap legacy backends via lazy imports. **M1.4** promoted `BaseProtocol` →
+> `ProtocolPort` (baru re-exports the shim; `ModbusProtocol` unchanged). `tests/test_ports.py`
+> (10 tests); guards green (core stays toolkit-free + acyclic). Suite **280 green**. Only the
+> promoted `ProtocolPort` is wired into the app; the rest await M2/M3. **Gate met → M2 may begin.**
 
 ---
 

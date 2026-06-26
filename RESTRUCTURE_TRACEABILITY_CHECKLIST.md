@@ -50,7 +50,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `zone_has_points` (5) → `core/domain/zone.py`
 
 ### 1.2 Protocol layer
-- [ ] `BaseProtocol` (all 6 methods) → `core/ports/protocol.py` (the port interface)
+- [x] `BaseProtocol` (all 6 methods) → `core/ports/protocol.py` — **M1.4 DONE** (promoted to `ProtocolPort`; `baru` re-exports `BaseProtocol` via shim; `ModbusProtocol` still subclasses it)
 - [ ] `ModbusProtocol.__init__` / `_start_server_thread` / `_run_server` / `stop` / `_on_packet` / `_on_connect` / `_get_slave` / `_write_coil_or_reg` / `trigger_alarm` / `reset_alarm` → `adapters/driven/protocol/modbus.py`
 - [ ] `ProtocolManager.__init__` / `register_protocol` / `get_protocol` / `stop_all` → `adapters/driven/protocol/manager.py`
 
@@ -212,7 +212,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 
 | Legacy file | Units | Moved | Remaining | Retired? |
 |---|---:|---:|---:|:--:|
-| `baru.py` | ~150 methods / 30 classes | 0 |  | [ ] |
+| `baru.py` | ~150 methods / 30 classes | 1 (`BaseProtocol`, M1.4) |  | [ ] |
 | `iscs_workflow.py` | ~120 methods / 20 classes | 0 |  | [ ] |
 | `iscs_reports.py` | 8 methods | 0 |  | [ ] |
 | `iscs_assets.py` | ~60 methods / 11 classes | 0 |  | [ ] |
