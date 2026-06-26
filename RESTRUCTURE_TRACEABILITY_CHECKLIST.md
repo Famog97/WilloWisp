@@ -60,20 +60,24 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [x] `Scenario.__init__` / `to_dict` / `from_dict` → `core/domain/scenario.py` — **M2.1 DONE** (baru shim; `WORKFLOW_AVAILABLE` guard dropped — `ProcedureFlow` is always core-available)
 - [x] `SuiteCard.__init__` / `from_card_cfg` / `from_direct` → `core/domain/scenario.py` — **M2.1 DONE** (baru shim)
 - [x] `Zone` (`__init__`, `width/height/cx/cy/contains`, `to_dict`, `from_dict`) → `core/domain/zone.py` — **M2.1 DONE** (pure geometry, R-HEX-3; baru shim)
-- [ ] `Scenario.__init__` / `to_dict` / `from_dict` → `core/domain/scenario.py`
-- [ ] `SuiteCard.__init__` / `from_card_cfg` / `from_direct` → `core/domain/scenario.py`
 
 ### 1.4 Verification (`ISCSVerifier`) → decompose (perception vs decision vs evidence)
-- [ ] `__init__` (9) → `core/services/verifier.py` (`VerificationCoordinator` wiring)
-- [ ] `_get_color_name` (6) → `core/services/verifier.py` (`SeverityColorClassifier`)
-- [ ] `_get_zone_bbox` (14) → `core/services/verifier.py` (`ZoneResolver`)
-- [ ] `verify` (23) → **keep/kill** (legacy single-shot; superseded by policies) → delete after caller check
-- [ ] `_grab_zone` (12) → **split** `adapters/driven/perception/local_grab.py` (grab) + `core/services/evidence_collector.py` (save)
-- [ ] `_analyze_image` (2) / `_preprocess_for_ocr` (2) / `_ocr_image` (4) → `adapters/driven/perception/tesseract_ocr.py` (`OcrReader`/`OcrPreprocessor`)
-- [ ] `_color_present` (28) → `core/services/verifier.py` (`ColorSampler`/`ColorComparator`)
-- [ ] `_blink_color_present` (21) → `core/services/verifier.py` (`BlinkAnalyzer`)
-- [ ] `verify_alarm_panel` (256) → **decompose** into `core/services/verifier.py`: `StatePoller` + `FrameSampleCoordinator` + `TimestampExtractor`/`ClockSyncEvaluator` + `AlarmPanel/NormalizationVerificationPolicy` + `EvidenceScreenshotWriter` (gated by M0.1)
-- [ ] `verify_list` (59) → `core/services/verifier.py` (`ListVerificationPolicy`)
+> **M2.4 ✅ (relocation-first):** the **whole `ISCSVerifier` class is relocated** to
+> `core/services/verifier.py` (rewired off baru globals: PIL via local import, OCR via
+> `iscs_OCR`, text-match via `core.services.text_match`, severity via `core.services.config`;
+> `UPGRADES_AVAILABLE` → anchor/sampler-presence). `baru` re-exports it as a shim;
+> `test_characterization_verify` (now patching the new module) + GUI smoke pass. The fine
+> perception/decision/evidence split (the sub-units below) is a deferred refinement.
+- [x] `__init__` (9) → `core/services/verifier.py` — **M2.4 relocated**
+- [~] `_get_color_name` (6) → `core/services/verifier.py` (`SeverityColorClassifier`)  — **relocated** (split deferred)
+- [~] `_get_zone_bbox` (14) → `core/services/verifier.py` (`ZoneResolver`)  — **relocated** (split deferred)
+- [~] `verify` (23) → **keep/kill** (legacy single-shot; superseded by policies) → delete after caller check  — **relocated** (split deferred)
+- [~] `_grab_zone` (12) → **split** `adapters/driven/perception/local_grab.py` (grab) + `core/services/evidence_collector.py` (save)  — **relocated** (split deferred)
+- [~] `_analyze_image` (2) / `_preprocess_for_ocr` (2) / `_ocr_image` (4) → `adapters/driven/perception/tesseract_ocr.py` (`OcrReader`/`OcrPreprocessor`)  — **relocated** (split deferred)
+- [~] `_color_present` (28) → `core/services/verifier.py` (`ColorSampler`/`ColorComparator`)  — **relocated** (split deferred)
+- [~] `_blink_color_present` (21) → `core/services/verifier.py` (`BlinkAnalyzer`)  — **relocated** (split deferred)
+- [~] `verify_alarm_panel` (256) → **decompose** into `core/services/verifier.py`: `StatePoller` + `FrameSampleCoordinator` + `TimestampExtractor`/`ClockSyncEvaluator` + `AlarmPanel/NormalizationVerificationPolicy` + `EvidenceScreenshotWriter` (gated by M0.1)  — **relocated** (split deferred)
+- [~] `verify_list` (59) → `core/services/verifier.py` (`ListVerificationPolicy`)  — **relocated** (split deferred)
 
 ### 1.5 Evidence
 - [ ] `FailureEvidenceCollector.collect` (220) → **decompose** into `core/services/evidence_collector.py` (per-artifact collectors + manifest builder)
@@ -225,7 +229,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 
 | Legacy file | Units | Moved | Remaining | Retired? |
 |---|---:|---:|---:|:--:|
-| `baru.py` | ~150 methods / 30 classes | 4 (`BaseProtocol` M1.4; `Zone`/`Monitor`/`VerifyResult` M2.1) |  | [ ] |
+| `baru.py` | ~150 methods / 30 classes | BaseProtocol(M1.4); Zone/Monitor/Scenario/SuiteCard/VerifyResult(M2.1); config+severity(M2.2); text-match(M2.4); **ISCSVerifier**(M2.4); → core |  | [ ] |
 | `iscs_workflow.py` | ~120 methods / 20 classes | flow model: enums + `_DynamicProcType`/`_resolve_proc_type` + `Procedure`/`IOGroup`/`ProcedureFlow`/`ProcedureResult`/`ExecutionTrace` + counters/schema (M2.1) |  | [ ] |
 | `iscs_reports.py` | 8 methods | whole module relocated to core/services/report_service.py (M2.5); iscs_reports is a shim |  | [ ] |
 | `iscs_assets.py` | ~60 methods / 11 classes | entities → core/domain/assets.py; rest (AssetManager/helpers/binding executor+resolvers) relocated to adapters/driven/persistence/asset_store.py; iscs_assets is a shim (M2.3) |  | [ ] |

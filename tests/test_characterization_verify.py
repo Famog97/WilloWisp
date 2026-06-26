@@ -33,10 +33,14 @@ def fast_config():
 
 
 def _patch_perception(monkeypatch, ocr_text, colour_present):
-    monkeypatch.setattr(baru, "PIL_AVAILABLE", True)
-    monkeypatch.setattr(baru, "TESSERACT_AVAILABLE", True)
-    monkeypatch.setattr(baru, "ImageGrab", SimpleNamespace(grab=lambda **k: _FakeImg()))
-    monkeypatch.setattr(baru, "ocr_run", lambda *a, **k: ocr_text)
+    # M2.4: ISCSVerifier now lives in core.services.verifier and reads its own
+    # PIL/ImageGrab/ocr_run, plus iscs_OCR.TESSERACT_AVAILABLE.
+    import core.services.verifier as V
+    import iscs_OCR
+    monkeypatch.setattr(V, "PIL_AVAILABLE", True)
+    monkeypatch.setattr(iscs_OCR, "TESSERACT_AVAILABLE", True)
+    monkeypatch.setattr(V, "ImageGrab", SimpleNamespace(grab=lambda **k: _FakeImg()))
+    monkeypatch.setattr(V, "ocr_run", lambda *a, **k: ocr_text)
 
 
 def _verifier(monkeypatch, colour_present):
