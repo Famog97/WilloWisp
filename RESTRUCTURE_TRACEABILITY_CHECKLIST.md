@@ -36,7 +36,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `_wire_subscribers` (10) → `core/api.py` (event-subscriber wiring)
 - [ ] `_load_template` (9) / `_save_template` (12) → `adapters/driven/persistence/` (template store)
 - [ ] `initialize_tesseract` (6) → `adapters/driven/perception/tesseract_ocr.py`
-- [ ] `save_config` (7) → `core/services/config.py` (`ConfigProvider`)
+- [x] `save_config` (7) → `core/services/config.py` (`ConfigProvider`) — **M2.2 DONE** (baru shim; `SEVERITY_MATRIX`/`APP_CONFIG` now backed by `core.services.config`; `SeverityColorClassifier` added for M2.4)
 - [ ] `init_test_run_log` (17) → `core/services/run_coordinator.py` (`EvidencePathManager`)
 - [ ] `_normalize` (3) → `core/services/report_service.py`
 - [ ] `_ocr_canon` (11) / `_ocr_contains` (20) / `_ocr_fuzzy_contains` (27) → `core/services/verifier.py` (`TextMatcher`)

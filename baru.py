@@ -274,36 +274,14 @@ def _save_template(data: dict):
 
 # Default ISCS Configuration Matrix (Now customizable in JSON)
 # Added "name" attributes to make color lookups dynamic and maintainable
-SEVERITY_MATRIX = {
-    "1": {"text": "1", "color": (255, 0,   0),   "name": "RED"},     # RED    — Supercritical
-    "2": {"text": "2", "color": (255, 126, 0), "name": "ORANGE"},  # ORANGE — Critical
-    "3": {"text": "3", "color": (255, 255, 0), "name": "YELLOW"},  # YELLOW — Less Critical
-    "0": {"text": "0", "color": (32,  169, 72),  "name": "GREEN"},   # GREEN  — Normal
-}
-
-# App Config Defaults
-APP_CONFIG = {
-    "modbus_port": 502,
-    "tesseract_cmd": r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-    "tesseract_lang": "eng",
-    "severity_matrix": SEVERITY_MATRIX,
-    "grid_spacing": 40,
-    "click_delay": 1.5,
-    "mouse_drift_px": 15,
-    "nav_wait_sec": 1.0,
-    "detection_duration_sec": 8.0,
-    "sampler_interval_ms":  100,
-}
-
-# Load Config if exists
-if CONFIG_PATH.exists():
-    try:
-        with open(CONFIG_PATH, "r") as f:
-            loaded = json.load(f)
-            loaded.pop("severity_matrix", None)  # never load from JSON — tuples become lists
-            APP_CONFIG.update(loaded)
-    except Exception as e:
-        print(f"Failed to load config.json: {e}")
+# M2.2: severity matrix + config defaults + load/save relocated to
+# core/services/config.py. The provider holds the live config; APP_CONFIG is the
+# same dict instance, so all existing mutations/reads are unchanged.
+from core.services.config import (
+    SEVERITY_MATRIX, DEFAULT_CONFIG, ConfigProvider, SeverityColorClassifier,
+)
+_config_provider = ConfigProvider(CONFIG_PATH)
+APP_CONFIG = _config_provider.config
 
 def initialize_tesseract():
     global TESSERACT_AVAILABLE
@@ -315,12 +293,8 @@ def initialize_tesseract():
 initialize_tesseract()
 
 def save_config():
-    try:
-        to_save = {k: v for k, v in APP_CONFIG.items() if k != "severity_matrix"}
-        with open(CONFIG_PATH, "w") as f:
-            json.dump(to_save, f, indent=4)
-    except Exception as e:
-        logging.error(f"Failed to save config: {e}")
+    # M2.2: delegates to the relocated ConfigProvider (same live config dict).
+    _config_provider.save()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 GRID_SPACING     = APP_CONFIG["grid_spacing"]
