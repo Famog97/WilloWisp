@@ -36,10 +36,17 @@
 
 | Status | Step | Action | Gate / Done-when | Closes |
 |:--:|---|---|---|:--:|
-| [ ] | M0.1 | Add characterization/snapshot tests pinning current output of the god methods: `SuiteRunner.run` (run trace on a fake-port run), `verify_alarm_panel` (PASS/FAIL rows on fixture frames), `_write_html_report` (golden HTML), `auto_register_procedures` (generated flow). | New tests green on current code | B7 |
-| [ ] | M0.2 | Add mechanical guards in CI: an import-cycle check and a "core-package may not import `tkinter`/`pyautogui`/`keyboard`/native hooks" check. | Checks run; pass (vacuously) on the empty package | B9 |
-| [ ] | M0.3 | Create the package skeleton + re-export shims: the new core/adapter package roots exist; legacy files re-export from them. | Full suite green; app launches; `import baru` unchanged | R5 |
+| [~] | M0.1 | Add characterization/snapshot tests pinning current output of the god methods: `SuiteRunner.run` (run trace on a fake-port run), `verify_alarm_panel` (PASS/FAIL rows on fixture frames), `_write_html_report` (golden HTML), `auto_register_procedures` (generated flow). | New tests green on current code | B7 |
+| [x] | M0.2 | Add mechanical guards in CI: an import-cycle check and a "core-package may not import `tkinter`/`pyautogui`/`keyboard`/native hooks" check. | Checks run; pass (vacuously) on the empty package | B9 |
+| [x] | M0.3 | Create the package skeleton + re-export shims: the new core/adapter package roots exist; legacy files re-export from them. | Full suite green; app launches; `import baru` unchanged | R5 |
 | [ ] | M0.4 | Build the run-path equivalence harness: capture the legacy run path's offline-observable output vs the (future) `SuiteScheduler` path, to be asserted equal before any collapse. | Harness records a baseline | B2 |
+
+> **M0 progress (2026-06-26):** M0.2 (`tests/test_architecture_guards.py`) and M0.3 (empty
+> `core/` + `adapters/` skeleton per §1.0b) done. M0.1 **partial** — golden characterizations
+> landed for `_write_html_report` (`tests/fixtures/legacy_report_golden.html`, volatiles masked)
+> and `auto_register_procedures` (`tests/fixtures/autoregister_golden.json`). **Remaining (M0.1
+> run-trace + `verify_alarm_panel`, and M0.4 equivalence harness)** need a small fake-port test
+> harness (fake screen/protocol/verifier) — done next, before M1. Suite: 266 green.
 
 **Exit M0 when:** characterization tests + mechanical guards are in CI, the skeleton + shims are
 in place, and the full suite is green.

@@ -1,0 +1,141 @@
+{
+  "template": [
+    {
+      "proc_type": "trigger_alarm",
+      "name": "Trigger Alarm",
+      "order": 10,
+      "enabled": true,
+      "depends_on": [],
+      "params": {}
+    },
+    {
+      "proc_type": "verify_alarm_panel",
+      "name": "Verify Alarm Panel",
+      "order": 20,
+      "enabled": true,
+      "depends_on": [
+        "Trigger Alarm"
+      ],
+      "params": {}
+    },
+    {
+      "proc_type": "navigate_alarm_list",
+      "name": "Navigate to Alarm List",
+      "order": 30,
+      "enabled": true,
+      "depends_on": [],
+      "params": {
+        "home_x": 10,
+        "home_y": 20,
+        "al_x": 30,
+        "al_y": 40
+      }
+    },
+    {
+      "proc_type": "verify_alarm_list",
+      "name": "Verify Alarm List",
+      "order": 40,
+      "enabled": true,
+      "depends_on": [
+        "Navigate to Alarm List"
+      ],
+      "params": {}
+    },
+    {
+      "proc_type": "navigate_event_list",
+      "name": "Navigate to Event List",
+      "order": 50,
+      "enabled": true,
+      "depends_on": [],
+      "params": {
+        "home_x": 10,
+        "home_y": 20,
+        "ev_x": 50,
+        "ev_y": 60
+      }
+    },
+    {
+      "proc_type": "verify_event_list",
+      "name": "Verify Event List",
+      "order": 60,
+      "enabled": true,
+      "depends_on": [
+        "Navigate to Event List"
+      ],
+      "params": {}
+    },
+    {
+      "proc_type": "navigate_equipment_page",
+      "name": "Navigate to Equipment Page",
+      "order": 70,
+      "enabled": true,
+      "depends_on": [],
+      "params": {
+        "home_x": 10,
+        "home_y": 20,
+        "rc_x": 70,
+        "rc_y": 80,
+        "pg_x": 90,
+        "pg_y": 100
+      }
+    },
+    {
+      "proc_type": "verify_equipment_page",
+      "name": "Verify Equipment Page",
+      "order": 80,
+      "enabled": true,
+      "depends_on": [
+        "Navigate to Equipment Page"
+      ],
+      "params": {}
+    },
+    {
+      "proc_type": "navigate_home",
+      "name": "Return to Home",
+      "order": 90,
+      "enabled": true,
+      "depends_on": [],
+      "params": {
+        "home_x": 10,
+        "home_y": 20
+      }
+    },
+    {
+      "proc_type": "reset_alarm",
+      "name": "Reset Alarm",
+      "order": 100,
+      "enabled": true,
+      "depends_on": [],
+      "params": {}
+    },
+    {
+      "proc_type": "verify_normalize",
+      "name": "Verify Normalize State",
+      "order": 110,
+      "enabled": true,
+      "depends_on": [
+        "Reset Alarm"
+      ],
+      "params": {}
+    }
+  ],
+  "io_groups": [
+    {
+      "point_id": "PT-1",
+      "label": "Door: Intrusion",
+      "step_names": [
+        "Trigger Alarm",
+        "Verify Alarm Panel",
+        "Navigate to Alarm List",
+        "Verify Alarm List",
+        "Navigate to Event List",
+        "Verify Event List",
+        "Navigate to Equipment Page",
+        "Verify Equipment Page",
+        "Return to Home",
+        "Reset Alarm",
+        "Verify Normalize State"
+      ]
+    }
+  ]
+}
