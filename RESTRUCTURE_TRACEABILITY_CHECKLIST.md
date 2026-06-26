@@ -172,8 +172,8 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `get_manager` (3) → `core/api.py` (`assets()` accessor)
 
 ### 4.2 Entity value objects → `core/domain/assets.py`
-- [ ] `TextAsset` / `ImageAsset` / `Region` / `FlowTemplate` (to_dict/from_dict/matches/props) → `core/domain/assets.py`
-- [ ] `BindingType` / `StepBinding` (to_dict/from_dict/text/image/hybrid) → `core/domain/assets.py`
+- [x] `TextAsset` / `ImageAsset` / `Region` / `FlowTemplate` (to_dict/from_dict/matches/props) → `core/domain/assets.py` — **M2.3 DONE** (iscs_assets shim)
+- [x] `BindingType` / `StepBinding` (to_dict/from_dict/text/image/hybrid) → `core/domain/assets.py` — **M2.3 DONE** (iscs_assets shim)
 
 ### 4.3 `AssetManager` → split into repositories / persistence / services
 - [ ] `instance` (7) / `reset` (4) / `__init__` (12) / `__repr__` / `stats` (7) → `adapters/driven/persistence/json_repos.py` (`AssetLibrary` facade)
@@ -217,7 +217,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 | `baru.py` | ~150 methods / 30 classes | 4 (`BaseProtocol` M1.4; `Zone`/`Monitor`/`VerifyResult` M2.1) |  | [ ] |
 | `iscs_workflow.py` | ~120 methods / 20 classes | flow model: enums + `_DynamicProcType`/`_resolve_proc_type` + `Procedure`/`IOGroup`/`ProcedureFlow`/`ProcedureResult`/`ExecutionTrace` + counters/schema (M2.1) |  | [ ] |
 | `iscs_reports.py` | 8 methods | 0 |  | [ ] |
-| `iscs_assets.py` | ~60 methods / 11 classes | 0 |  | [ ] |
+| `iscs_assets.py` | ~60 methods / 11 classes | entity value objects (TextAsset/ImageAsset/Region/FlowTemplate/BindingType/StepBinding) → core/domain/assets.py (M2.3) |  | [ ] |
 | `iscs_OCR.py` | 5 functions | 0 |  | [ ] |
 | `iscs_recorder.py` | ~18 methods / 2 classes | 0 |  | [ ] |
 
