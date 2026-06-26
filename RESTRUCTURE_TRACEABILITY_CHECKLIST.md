@@ -168,6 +168,14 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 
 ## 4. `iscs_assets.py` (1,133 L) → core/domain + persistence + plugins; **retired M6**
 
+> **M2.3 ✅ (relocation-first):** the asset **entities** are in `core/domain/assets.py` (§4.2),
+> and the rest of the module — `AssetManager` (§4.3), the module-level helpers (§4.1), and the
+> binding executor/resolvers (§4.4) — is **relocated verbatim** to
+> `adapters/driven/persistence/asset_store.py`; `iscs_assets` is a shim re-exporting the full
+> surface (incl. `_BINDING_RESOLVERS`/`_APP_DIR`). The fine-grained split (per-entity repos ·
+> `IdSequencer` · `ImageFileStore` · `BindingResolutionService` · resolvers→`plugins/`) is a
+> deferred refinement. All §4.1/§4.3/§4.4 boxes below = **relocated** (split pending).
+
 ### 4.1 Module-level
 - [ ] `set_app_dir` (4) / `_get_app_dir` (5) / `_now_iso` (3) → `adapters/driven/persistence/json_repos.py`
 - [ ] `register_asset_migrator` (3) / `_migrate_assets_dict` (20) → `adapters/driven/persistence/json_repos.py` (`AssetPersistence`)
@@ -220,7 +228,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 | `baru.py` | ~150 methods / 30 classes | 4 (`BaseProtocol` M1.4; `Zone`/`Monitor`/`VerifyResult` M2.1) |  | [ ] |
 | `iscs_workflow.py` | ~120 methods / 20 classes | flow model: enums + `_DynamicProcType`/`_resolve_proc_type` + `Procedure`/`IOGroup`/`ProcedureFlow`/`ProcedureResult`/`ExecutionTrace` + counters/schema (M2.1) |  | [ ] |
 | `iscs_reports.py` | 8 methods | whole module relocated to core/services/report_service.py (M2.5); iscs_reports is a shim |  | [ ] |
-| `iscs_assets.py` | ~60 methods / 11 classes | entity value objects (TextAsset/ImageAsset/Region/FlowTemplate/BindingType/StepBinding) → core/domain/assets.py (M2.3) |  | [ ] |
+| `iscs_assets.py` | ~60 methods / 11 classes | entities → core/domain/assets.py; rest (AssetManager/helpers/binding executor+resolvers) relocated to adapters/driven/persistence/asset_store.py; iscs_assets is a shim (M2.3) |  | [ ] |
 | `iscs_OCR.py` | 5 functions | 0 |  | [ ] |
 | `iscs_recorder.py` | ~18 methods / 2 classes | 0 |  | [ ] |
 
