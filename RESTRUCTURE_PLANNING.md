@@ -264,6 +264,17 @@ Any future decomposition must respect these. Marked **[HARD]** (non-negotiable) 
   logic writes to the UI and reads UI state), and engine ↔ editor (the editor
   manipulates engine/model internals). These bidirectional references are the primary
   obstacle to any clean separation.
+- **UI framework coupling.** The core today is welded to **Tkinter** (and to
+  `pyautogui`/native screen-grab) — worker logic calls `root.after`, mutates widgets,
+  and reads widget state directly; geometry is expressed in canvas pixels. This makes
+  the GUI **non-swappable**: a Web/PyQt/CLI front-end cannot be substituted without
+  rewriting business logic. The decomposition must drive toward a **single UI-agnostic
+  boundary** so any framework can sit in front of the same core.
+- **Thread-marshalling constraints.** The engine runs on background worker threads and
+  must deliver events to a UI loop that is framework-specific (Tk `.after`, Qt signals,
+  WebSocket/async, or a synchronous CLI). Today this marshalling is hard-coded to
+  Tkinter. The boundary must **abstract event delivery** so the threading/marshalling
+  mechanism is the *adapter's* concern, never the core's.
 - **Healthy directional dependencies to preserve.** Capabilities depend only on the
   kernel; the standalone reporting and asset modules deliberately avoid depending on
   the kernel. These one-way edges are assets — they must not be inverted.
@@ -293,6 +304,8 @@ Any future decomposition must respect these. Marked **[HARD]** (non-negotiable) 
 | K8 | **Migration complexity / long-branch conflicts** on the largest files. | High | Medium | The big files are merge magnets during a long effort. |
 | K9 | **Testing gaps** — extracted units lack tests; false confidence. | Medium | Medium | Today the worst god methods are largely untested. |
 | K10 | **Scope creep** into rewrites/features under cover of "refactor." | Medium | Medium | Must hold the "move not rewrite" line. |
+| K11 | **UI framework coupling** — core stays welded to Tkinter, defeating swappability. | High | High | Mitigate with a single UI-agnostic facade + driven ports; forbid toolkit imports in the core (becomes audit blocker B9). |
+| K12 | **Thread-marshalling lock-in** — worker→UI delivery hard-coded to one toolkit. | High | High | Mitigate with an abstract event-dispatch boundary the UI injects; the core never names a toolkit's threading API. |
 
 ---
 
@@ -322,6 +335,11 @@ design, stated as measurable thresholds.
   and "logic reaches into UI" patterns.
 - **One canonical run path** (no parallel duplicated run methods), proven
   behavior-equivalent. *Why:* removes drift risk (K7).
+- **Complete UI independence — verified by a headless CLI mockup.** The entire
+  author→run→report cycle must be drivable through the UI-agnostic core boundary with **no
+  GUI toolkit loaded**, demonstrated by a minimal **CLI adapter** that imports the same core
+  as the desktop app. *Why:* a passing headless path is the objective proof that the GUI is
+  swappable (Web/PyQt/CLI) and that no business logic leaked into the UI.
 - **Full test suite green at every increment; live suite re-validated on the rig after
   any change to the run/perception path.** *Why:* the only backstops available given
   the untestable live path.
@@ -369,6 +387,19 @@ To be answered **before** design. Grouped by boundary type.
 - Which startup side effects (config load, OCR init, protocol registration, plugin
   discovery, legacy-adapter registration) have ordering requirements that any new
   composition must preserve?
+
+**UI-portability boundaries (added for the Hexagonal target)**
+- **Native screen capture across environments.** A local desktop UI (Tk/PyQt) can grab the
+  screen in-process, but a **Web UI cannot** capture the SCADA machine from the browser. How
+  does the core obtain frames in each environment — i.e., what is the contract of a
+  capture/input **driven port**, and is the web case served by a **remote capture/automation
+  agent** running on the SCADA host while the browser only renders? Likewise for input
+  automation (`pyautogui`) and global hotkeys.
+- **One inbound boundary.** What is the minimal, stable surface every UI must call (and the
+  *only* thing it may call) so that swapping the front-end touches no core code?
+- **Event marshalling contract.** What does the abstract event-delivery boundary guarantee
+  (ordering, threading, back-pressure) so Tk `.after`, Qt signals, WebSockets, and a
+  synchronous CLI can each satisfy it without the core knowing which is in use?
 
 ---
 

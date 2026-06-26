@@ -1,15 +1,31 @@
 # WilloWisp — Decomposition Design (ownership all the way down)
 
-**Role:** Principal Software Architect · **Phase:** 2 of 3 — **Design (v2, readiness-hardened)**
+**Role:** Principal Software Architect · **Phase:** 2 of 3 — **Design (v3, Hexagonal / Ports & Adapters)**
 **Builds on:** [`RESTRUCTURE_PLANNING.md`](RESTRUCTURE_PLANNING.md) ·
 **Audited by:** [`RESTRUCTURE_MIGRATION_READINESS.md`](RESTRUCTURE_MIGRATION_READINESS.md)
 **Date:** 2026-06-25 · **Status:** Draft for re-audit
 
-> This revision closes the audit blockers **B1–B8**: every significant method now has an
-> owner (no orphans), the god **methods** are decomposed to the action level, and
-> lifecycle / thread / state ownership, startup ordering, and "must-not-own" guardrails
-> are specified. Names are **logical ownership units**, not a folder layout; physical
-> packaging and the move order are the **Migration** phase.
+> v2 closed the audit blockers **B1–B8** (every method owned, god methods decomposed,
+> lifecycle/thread/state ownership, guardrails). **v3 imposes a strict Hexagonal
+> (Ports & Adapters) boundary** so the UI is **100% swappable**: the Tkinter GUI can be
+> replaced by a Web UI (FastAPI + React), PyQt, or a pure CLI **without changing any core
+> business logic, perception, Modbus, or reporting code**. Names are **logical ownership
+> units**, not a folder layout; packaging and move order remain the **Migration** phase.
+
+### Hexagonal architecture rules (binding)
+- **R-HEX-1 — One inbound gate.** The UI interacts with the core **only** through a single
+  UI-agnostic facade, **`WilloWispCoreAPI`**. No UI component constructs engines, coordinates
+  runs, or touches repositories directly.
+- **R-HEX-2 — Abstract event marshalling.** The core emits events through an abstract
+  **`EventDispatcher`** port. Each UI injects its own dispatcher (Tk `.after`, Qt signals,
+  WebSocket/async, CLI sync). The core never imports a UI toolkit.
+- **R-HEX-3 — Pure coordinate models.** The core understands only normalized,
+  framework-agnostic geometry (absolute-desktop coordinates, zones, bboxes). All canvas
+  drawing, coordinate-picking overlays, and drag physics live **only** in the UI adapter.
+- **R-HEX-4 — Strict boundary reclassification.** Framework-agnostic logic (scheduling,
+  verification, boundary checks, data/repos, reporting) is a **Core Service** inside the
+  hexagon. Anything touching a window, widget, canvas, dialog, or OS input hook is a
+  **UI Adapter** outside it. "Controllers" from v2 are reclassified accordingly (§1.0).
 
 ## Design rule
 
@@ -39,49 +55,147 @@ method) that names ≥2 concerns in its "owns" line is not done.
 
 ## 1. Cross-cutting design (applies to all units)
 
-### 1.1 Lifecycle & thread-affinity model
-Every unit declares an **instance scope** and a **thread affinity**. This is binding.
+### 1.0 Hexagonal boundary (the one rule everything else serves)
+
+```
+        DRIVING (primary) ADAPTERS — interchangeable, never imported by the core
+   ┌───────────────┬───────────────┬───────────────┬───────────────────────────┐
+   │  Tkinter GUI  │   PyQt GUI    │  Web (FastAPI │   CLI (headless)          │
+   │  adapter      │   adapter     │   + React)    │   adapter                 │
+   └──────┬────────┴──────┬────────┴──────┬────────┴───────────┬───────────────┘
+          │   calls       │  calls        │  calls             │ calls
+          ▼               ▼               ▼                    ▼
+   ╔══════════════════════════════ INBOUND PORT ══════════════════════════════╗
+   ║                       WilloWispCoreAPI  (the only gate)                    ║
+   ╠═══════════════════════════════════════════════════════════════════════════╣
+   ║                       CORE (hexagon interior — UI-agnostic)                ║
+   ║   Application services: ImportService · DefaultFlowBuilder · FlowAuthoring ║
+   ║     SuiteScheduler · PointRunCoordinator · RerunController · engine        ║
+   ║     VerificationCoordinator + policies · ReportService · WorkspaceSession  ║
+   ║   Domain: Scenario · Zone(geometry) · Monitor · Procedure/IOGroup/Flow ·   ║
+   ║     IOPoint · ResultView                                                   ║
+   ║   Cross-cutting: ConfigProvider · SeverityColorClassifier · LoadManifest · ║
+   ║     capability registry · EventBus                                         ║
+   ╠═══════════════════════════════ OUTBOUND PORTS ════════════════════════════╣
+   ║  EventDispatcher │ ScreenCapturePort │ InputControlPort │ ProtocolPort │   ║
+   ║  OcrPort │ FileSystemPort │ ClockPort                                      ║
+   ╚════════┬─────────────────┬─────────────────┬─────────────────┬────────────╝
+            ▼                 ▼                 ▼                 ▼
+   DRIVEN (secondary) ADAPTERS — interchangeable per environment
+   UI-injected         local: ImageGrab/mss   pyautogui         pymodbus
+   dispatcher          remote: capture agent   remote agent      ...
+   (Tk/Qt/Web/CLI)     (web)                   (web)
+```
+
+**Reclassification of v2 "controllers" (R-HEX-4).** Each splits into a **Core Service**
+(inside) and a thin **UI Adapter** (outside) that only forwards intents to the facade and
+renders events:
+
+| v2 unit | Core Service (inside hexagon) | UI Adapter (outside) |
+|---|---|---|
+| `ImportController` | `ImportService` (sheet/column-map parse, persist) | file-picker dialog |
+| `MonitorController` | monitor list via `ScreenInfoPort`, selection state | minimap/thumbnail drawing |
+| `ZoneController` | zone data + persistence (geometry) | overlay window (drawing) |
+| `ModeController` | mode state on the scenario | mode buttons |
+| `RunController` | *(none — it becomes intent-forwarding only)* | run/stop/pause buttons → facade |
+| `SettingsController` | `ConfigProvider` read/write | settings dialog |
+| `CardConfigController` | card-config data model | card-config dialog |
+| `DiagnosticsController` | OCR-monitor uses core perception | help/preview windows |
+| `HotkeyController` | — | OS hotkey adapter (driving) |
+| `StatsView`/`ExecutionStateView`/`LogSink` | — | event-driven UI adapters |
+
+> **Rule of thumb:** if removing Tkinter would break it, it is a **UI Adapter**. If it would
+> still compile and pass tests headless, it is a **Core Service**.
+
+### 1.1 Lifecycle & thread-affinity model (with `EventDispatcher`)
+
+The core runs on background worker threads and **never** calls a UI toolkit. It hands every
+outbound event to the injected **`EventDispatcher`**, whose adapter re-enters the UI's own
+loop safely. The core is identical for all four UIs; only the dispatcher differs.
+
+```
+worker thread (core)                 EventDispatcher (port)         UI loop (adapter)
+  emit(StepCompleted) ───────────►   dispatch(event) ──────────►   Tk:  root.after(0, ...)
+                                                                   Qt:  pyqtSignal.emit(...)
+                                                                   Web: asyncio queue → WS push
+                                                                   CLI: synchronous handler
+```
 
 | Unit group | Instance scope | Thread affinity |
 |---|---|---|
-| `ConfigProvider`, `SeverityColorClassifier`, `ProtocolManager`, capability `registry`, `EventBus`, `LoadManifest`, `AssetLibrary` (+repos/persistence/file store) | **singleton (per-app)** | thread-safe / either |
-| `OcrReader`, `OcrPreprocessor`, `TextMatcher`, `ScreenCaptureService`, `ColorSampler/Comparator`, `BlinkAnalyzer`, `TimestampExtractor`, `ClockSyncEvaluator`, `EvidenceScreenshotWriter`, `EvidencePathManager` | **singleton, stateless** (injected) | callable on **worker** thread (screen grab + OCR must be off the Tk loop) |
-| `AppShell`, `AppCompositionRoot`, all `*Controller`/`*View`, `LogSink`, `ProfileEventHub`, `WorkspaceSession` | **per-app** | **Tk main thread only** |
-| `SuiteExecutionThread` | **per-run** | **is** the worker thread |
-| `SuiteScheduler`, `PointRunCoordinator`, `RerunController`, `RunProgressReporter`, `RecorderCoordinator`, `ReportTrigger` | **per-run** | worker (progress marshalled to UI via events) |
-| `FlowRunCoordinator`, `PointExecutor`, `StepDispatcher`, `StepLifecycle`, `DependencyGate`, `RunControl` | **per-run** | worker |
-| `VerificationCoordinator`, the verification **policies** | **per-point** | worker |
-| `FrameSampleCoordinator` | **per-step** | worker, **timing-sensitive — may not cross a latency-adding boundary** |
-| `ExecContext` | **per-point mutable state** | created on worker; not shared across points |
+| `WilloWispCoreAPI` (the facade) | **singleton (per-app)** | call-from-any-thread; returns fast, runs work on workers |
+| `EventDispatcher` (port; UI-supplied impl) | **per-app, injected at startup** | **owned by the UI**; marshals worker→UI-loop |
+| `ConfigProvider`, `SeverityColorClassifier`, `ProtocolManager`, registry, `EventBus`, `LoadManifest`, `AssetLibrary` (+repos/persistence/file store) | singleton | thread-safe / either |
+| Perception + evidence services + `ScreenCapturePort`/`InputControlPort`/`OcrPort` impls | singleton, stateless (injected) | **driven adapters**; invoked on the **worker** thread |
+| Core application services (`ImportService`, `DefaultFlowBuilder`, `SuiteScheduler`, run/verify units, `ReportService`, `WorkspaceSession`) | per-app or per-run | **worker / pure** — no UI thread dependency |
+| **UI Adapters** (`AppShell`, all views/dialogs/overlays, the thin intent-forwarding controllers, `LogSink`, hotkeys) | per-app | **the UI's own loop only** (Tk main / Qt / web request) |
+| `SuiteExecutionThread` | per-run | **is** the worker thread |
+| `FrameSampleCoordinator` | per-step | worker, **timing-sensitive — may not cross a latency-adding boundary** |
+| `ExecContext` | per-point mutable state | worker; not shared across points |
 
-### 1.2 State ownership & injection (B4)
-- **Per-point run state (`ExecContext`)** is **created and owned by `PointRunCoordinator`**,
-  passed **by reference** into `FlowRunCoordinator` → capabilities. Capabilities mutate it
-  through a **typed surface** (the existing context fields), never via globals. No unit other
-  than the current point's coordinator holds a reference after the point completes.
-- **Shared stateless services** (`ScreenCaptureService`, `EvidencePathManager`, perception
-  units) are **constructed once by `AppCompositionRoot`** and **injected** into both the run
-  subsystem and verification — never reconstructed, never global.
-- **Ambient values become owned, injected singletons:** configuration → `ConfigProvider`;
-  the severity↔colour matrix → `SeverityColorClassifier`; capability availability → the
-  existing `LoadManifest`. **No module-level globals remain** as the source of truth.
+> No core unit is bound to "the Tk main thread." Thread re-entry is **entirely** the
+> `EventDispatcher` adapter's job — that is what makes the UI swappable.
 
-### 1.3 Startup ordering (owned by `AppCompositionRoot`)
-The composition root owns this exact order; nothing else triggers init-on-import:
+### 1.2 State ownership, injection & the `WilloWispCoreAPI` facade (B4)
+
+**The facade is the single inbound port (R-HEX-1).** It owns *no* logic itself; it exposes a
+stable, UI-agnostic surface and delegates to the core services constructed by the composition
+root. Illustrative method groups (contracts, not implementations):
+
 ```
-1 load config            (ConfigProvider)
-2 init OCR/Tesseract     (OcrReader.initialize)
-3 register protocols     (ProtocolManager)
-4 build registry → discover plugins → register legacy adapters → build LoadManifest
-5 wire event subscribers (reporting, recorder)
-6 build AppShell + controllers/views, inject services
-7 enter Tk mainloop
+WilloWispCoreAPI                      # constructed once; injected with all core services + ports
+  # lifecycle / wiring
+  set_event_dispatcher(dispatcher)    # UI injects its EventDispatcher (R-HEX-2)
+  subscribe(event_type, handler)      # convenience over the EventBus
+  shutdown()
+  # IO list / profiles
+  list_monitors() -> [MonitorInfo]    # via ScreenInfoPort (no GUI dependency)
+  import_io_list(path, sheet, column_map) -> ProfileRef
+  list_profiles() / load_profile(ref)
+  # scenario authoring (pure data in/out — no widgets)
+  get_scenario(id) / set_mode(id, mode)
+  save_zones(id, [Zone]) / get_zones(id)         # Zone = pure geometry (R-HEX-3)
+  build_default_flow(id) -> Flow
+  get_flow(id) / save_flow(id, Flow) / edit_step(id, step) / apply_to_all(id, step)
+  # assets
+  assets() -> AssetLibrary façade (read/CRUD) ; resolve_binding(binding)
+  # execution (returns immediately; progress arrives via EventDispatcher)
+  start_suite(suite_config) -> RunHandle
+  stop() / pause() / resume() / get_run_state() -> RunState
+  # reporting (offline, from persisted results)
+  list_templates() / generate_report(template_key, results_ref) -> path
+  # config
+  get_config() / update_config(patch)
 ```
 
-### 1.4 Event-driven UI decoupling
-Run/verify/report units **emit** lifecycle/progress events; **views subscribe**. No service
-holds a UI handle. Cross-thread events from the worker are marshalled to the Tk main thread
-by the subscribing view. This retires the UI↔logic back-reference (Planning K3).
+- **Per-point run state (`ExecContext`)** is created and owned by `PointRunCoordinator`
+  (inside the core), passed by reference into the engine; capabilities mutate it through its
+  typed surface, never via globals. It never escapes the core to a UI.
+- **Driven ports are injected, not imported.** `ScreenCapturePort`, `InputControlPort`,
+  `ProtocolPort`, `OcrPort`, `FileSystemPort`, `ClockPort` are interfaces; the composition
+  root binds an environment-specific adapter (local desktop vs remote capture agent for web).
+- **Ambient values are owned, injected singletons** (`ConfigProvider`,
+  `SeverityColorClassifier`, `LoadManifest`); **no module-level globals** as source of truth.
+
+### 1.3 Startup ordering (owned by `AppCompositionRoot`, per UI)
+Each UI ships its own composition root that builds the **same** core and injects **its own**
+adapters:
+```
+1 load config                         (ConfigProvider)
+2 bind driven adapters to ports       (ScreenCapture/Input/Protocol/Ocr per environment)
+3 init OCR                            (OcrPort impl)
+4 build registry → discover plugins → register legacy adapters → LoadManifest
+5 construct core services + WilloWispCoreAPI (inject services + ports)
+6 inject the UI's EventDispatcher; wire event subscribers (reporting, recorder)
+7 build the UI adapter (Tk/Qt/Web/CLI) bound ONLY to WilloWispCoreAPI
+8 enter the UI's own loop
+```
+Steps 1–6 are identical across UIs; only 2, 7, 8 differ — the proof of swappability.
+
+### 1.4 Event-driven decoupling via the dispatcher
+Core run/verify/report units **emit** lifecycle/progress events to the `EventBus`; the
+`EventDispatcher` adapter delivers them onto the UI's loop; UI adapters render them. **No core
+unit holds a UI handle or calls a UI toolkit** (retires Planning K3 and enforces R-HEX-2).
 
 ### 1.5 Guardrail rule (B8)
 Every `*Coordinator`/`*Controller`/`*Service`/facade **must** declare an explicit
@@ -263,26 +377,46 @@ SuiteExecutionThread.run()
 | `_clear_workspace`(12) | **`WorkspaceSession.reset()`** (new) — broadcasts; controllers subscribe |
 | `_sync_open_card_config`(12) | **`CardConfigController`** (new, owns `SuiteCardConfigDialog`) |
 
-### 5.2 Class tree
+### 5.2 Class tree — split across the hexagon boundary
+The v2 `App` god class splits into a **core half** (behind `WilloWispCoreAPI`) and a **UI-adapter
+half** (replaceable per framework). The UI half holds **no business logic** — it forwards
+intents to the facade and renders events from the dispatcher.
+
 ```
-app: AppShell · AppCompositionRoot · WorkspaceSession · LogSink · ProfileEventHub
-  controllers/ ImportController · MonitorController · ZoneController · ModeController ·
-               RunController · SettingsController · HotkeyController · DiagnosticsController ·
-               CardConfigController
-  views/       StatsView · ExecutionStateView
+CORE (inside hexagon, behind WilloWispCoreAPI)
+  WorkspaceSession        current working set (profile/monitor/zones/mode) + reset broadcast
+  ImportService           sheet/column-map parse + persist
+  (run/verify/report/asset/config services live in §2–§4, §9, §10)
+
+UI ADAPTER (outside — Tkinter today; swappable)
+  AppShell                window, layout, taskbar, resize         (Tk-only)
+  TkCompositionRoot       builds core + injects TkEventDispatcher  (per-UI, §1.3)
+  TkEventDispatcher       marshals worker events via root.after    (the port impl)
+  views/   StatsView · ExecutionStateView · LogSink   (render events only)
+  intent-forwarders (thin):
+    ImportView      → WilloWispCoreAPI.import_io_list / list_profiles
+    MonitorView     → list_monitors / select; draws minimap
+    ZoneView        → save_zones / get_zones; hosts the overlay adapter (§8)
+    ModeView        → set_mode
+    RunControls     → start_suite / stop / pause / resume   (NO widget logic beyond enable/disable)
+    SettingsView    → get_config / update_config
+    CardConfigView  → card-config get/save
+    DiagnosticsView → help/preview; OCR-monitor reads core perception
+    HotkeyAdapter   → maps OS hotkeys to facade calls
 ```
 
 ### 5.3 Why / why-not + guardrails
-- **AppShell** owns *the window*; **does NOT own** any workflow.
-- **AppCompositionRoot** owns *wiring + startup order* (§1.3); **does NOT own** behaviour.
-- **WorkspaceSession** owns the *current working set* (profile, monitor, zones, mode) and the
-  *reset* broadcast — resolving the `_clear_workspace` orphan as one state owner.
-- **RunController (was H-risk)** is now *intent-only*: start/stop/pause requests + reacting to
-  run events. It **does NOT own** execution-state widget mutation (→ `ExecutionStateView`),
-  scheduling, step logic, recording, or reporting. This guardrail defuses the audit's
-  top aggregation risk.
-- Each controller owns one workflow and coordinates others only via `ProfileEventHub`/the
-  event bus — never direct cross-controller calls.
+- **AppShell / TkCompositionRoot / TkEventDispatcher** are **UI Adapters** — replacing them
+  with `QtShell`/`WebApp` + their own dispatcher swaps the entire UI with **zero core change**.
+- **WorkspaceSession** (core) owns the *current working set* and the *reset* broadcast,
+  resolving the `_clear_workspace` orphan; the UI subscribes to the reset event.
+- **`RunControls` (was the H-risk `RunController`)** is now a **dumb intent-forwarder**: it
+  calls `WilloWispCoreAPI.start_suite/stop/pause/resume` and toggles its own enabled/disabled
+  state from `RunState` events. It **does NOT own** scheduling, step logic, recording,
+  reporting, or any other view's widgets. This both defuses the audit's top aggregation risk
+  **and** is the proof of R-HEX-1: a Web "Run" button calls the identical facade method.
+- **No UI adapter imports the core's collaborators**; it holds only a reference to
+  `WilloWispCoreAPI` and the `EventDispatcher`. **No core service imports `tkinter`.**
 
 ---
 
@@ -317,18 +451,50 @@ flow-editor-ui: FlowTreeView(View) · FlowEditModel(Model) · StepEditController
 (add/move/bulk-apply) with no Tk. `CheckAuthoringController` is the **single** owner of the
 cross-subsystem seam; the dialog no longer reaches into engine/asset internals directly.
 
-## 8. `OverlayWindow` (S2)
-**Map:** canvas draw/redraw/erase/indicators → `ZoneCanvasView`; mouse handlers + hit-test +
-cursor → `DrawingInteractionController`; zone ops + undo + size-check → `ZoneEditModel`;
-toolbar/type/mode → `ZoneToolbar`; `_canvas_to_abs`/`_abs_to_canvas` → `CoordinateTransform`;
-`_link_zone_to_anchor` → `AnchorLinker`; `_on_page_change` → `ZoneEditModel`.
+## 8. `OverlayWindow` (S2) — pure geometry (core) vs canvas (UI adapter)
+
+This is the sharpest test of R-HEX-3: zone capture must work the same whether the user draws
+on a Tk `Canvas`, an HTML `<canvas>`, or a Qt `QGraphicsScene`. So the **geometry is pure
+core data** and the **drawing/interaction is a replaceable adapter** that produces and consumes
+that data through the facade.
+
+### 8.1 Split across the boundary
 ```
-zone-capture-ui: ZoneCanvasView(View) · DrawingInteractionController · ZoneEditModel(Model) ·
-                 ZoneToolbar · CoordinateTransform · AnchorLinker
+CORE (pure geometry — no toolkit)
+  Zone / Region            normalized, absolute-desktop coordinates (domain value objects)
+  ZoneLayout               the set of zones for a scenario/page + invariants (size-check, overlap)
+  ZoneEditSession          add/move/delete/change-type/undo over ZoneLayout (pure state machine)
+  CoordinateModel          normalization math: absolute-desktop ↔ normalized fractions
+                           (NO canvas/pixel/widget concept)
+
+UI ADAPTER (Tkinter today; swappable)
+  ZoneCanvasView           draw/redraw/erase zones + saved indicators        (Tk Canvas)
+  DrawingInteractionAdapter mouse press/drag/release/hover, hit-test, cursor (drag physics)
+  CanvasViewport           canvas-pixel ↔ absolute-desktop mapping (knows the widget/zoom/pan)
+  ZoneToolbarView          type/mode buttons
 ```
-**Why/why-not:** the Model (zones + undo) is testable without a canvas; the View only draws;
-`CoordinateTransform` isolates monitor-offset bugs as one testable concern. None owns its
-neighbour.
+
+### 8.2 Collaboration (draw a zone, then persist)
+```
+DrawingInteractionAdapter (gesture in canvas pixels)
+  └─ CanvasViewport.to_absolute(px,py) ──► absolute coords        (adapter-side, widget-aware)
+       └─ ZoneEditSession.add(Zone(absolute…)) ──► ZoneLayout     (core, pure)
+            └─ ZoneCanvasView.render(ZoneLayout via CanvasViewport.to_canvas)  (adapter)
+On "save": UI calls WilloWispCoreAPI.save_zones(scenario_id, ZoneLayout.zones)  (pure geometry)
+```
+
+### 8.3 Why / why-not
+- **`CoordinateModel` (core) vs `CanvasViewport` (adapter)** is the key distinction: the core
+  does *normalization math* with no notion of a canvas; the adapter does *pixel↔desktop*
+  mapping because only it knows the widget, zoom, and pan. A Web overlay supplies its own
+  `CanvasViewport`; the core math is untouched.
+- **`ZoneEditSession` + `ZoneLayout` (core)** make zone editing + undo + size/overlap checks
+  unit-testable with **no canvas** — and reusable by any UI.
+- **`ZoneCanvasView` / `DrawingInteractionAdapter` (adapter)** own all Tk drawing and drag
+  physics; replacing them does not touch a line of core geometry. They **do NOT own** the zone
+  data — they emit edits into `ZoneEditSession` and render its `ZoneLayout`.
+- The facade only ever exchanges **`Zone` value objects** with the UI (R-HEX-3) — never canvas
+  items or widget coordinates.
 
 ## 9. `AssetManager` (S3, by request)
 **Map:** per-entity CRUD → `TextAssetRepository`/`ImageAssetRepository`/`RegionRepository`/
@@ -413,8 +579,17 @@ The output contract is unchanged (already golden-tested); only the internal tran
 | B5 lifecycle/thread/startup | §1.1, §1.3 |
 | B6 `_write_html_report` | §10.1 |
 | B7 characterization-first | §1.6 (precondition) |
-| B8 must-not-own guardrails | §2.4, §3.4, §4.4, §5.3, §6, §9 (esp. `RunController` split in §5.3) |
+| B8 must-not-own guardrails | §2.4, §3.4, §4.4, §5.3, §6, §9 (esp. `RunControls` intent-only split in §5.3) |
+| **B9 strict UI boundary decoupling** | §1.0 (hexagon + reclassification), §1.1 (dispatcher thread model), §1.2 (facade + ports), §5.2–5.3 (App split), §8 (geometry vs canvas) |
 
-> **Next:** on re-audit ≥ ~85, the **Migration** phase orders these ~65 units into shippable,
-> test-gated steps (leaves → UI last; events before extraction; one rig re-validation after
-> the run/perception move).
+| Hexagonal rule | Realized by |
+|---|---|
+| R-HEX-1 one inbound gate | `WilloWispCoreAPI` facade — §1.2; the only thing UI adapters import (§5.2) |
+| R-HEX-2 abstract event marshalling | `EventDispatcher` port, UI-injected — §1.1, §1.4 |
+| R-HEX-3 pure coordinate models | `Zone`/`ZoneLayout`/`CoordinateModel` core vs `CanvasViewport`/canvas adapter — §8 |
+| R-HEX-4 boundary reclassification | Core-Service vs UI-Adapter table — §1.0 |
+
+> **Next:** on re-audit ≥ ~85 (now including **B9**), the **Migration** phase orders these
+> units into shippable, test-gated steps (driven ports + core services first; the Tkinter
+> adapter built last on top of `WilloWispCoreAPI`; a CLI adapter built to **prove headless
+> execution**; one rig re-validation after the run/perception move).

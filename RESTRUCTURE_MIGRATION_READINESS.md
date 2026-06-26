@@ -180,6 +180,16 @@ new dumping ground.
 already shows aggregation symptoms. Four `*Coordinator`/`*Service`/facade classes are **M**
 and need an explicit "must-not-own" guardrail in the Design before migration.
 
+**Effect of the Hexagonal boundary on aggregation risk.** Enforcing a single inbound
+`WilloWispCoreAPI` gate and the Core-Service / UI-Adapter reclassification **structurally
+caps** the worst offenders: `App` cannot re-accrete because UI adapters may hold *only* a
+facade reference (no engines, repos, or sibling controllers), and `RunController` collapses to
+a dumb intent-forwarder (start/stop/pause → facade), removing its execution-state and
+widget-mutation responsibilities by construction. A toolkit-import ban in the core (B9 below)
+makes "logic leaking into the UI" a mechanically detectable violation rather than a review
+judgement. Net: the boundary converts several **M/H** aggregation risks from "watch it" to
+"prevented by contract."
+
 ---
 
 ## Part 4 — Migration Ambiguities & Blockers
@@ -238,6 +248,14 @@ and need an explicit "must-not-own" guardrail in the Design before migration.
   required safety net).
 - **B8 — "Must-not-own" guardrails** not yet stated for the H/M risk classes in Part 3
   (esp. `RunController`).
+- **B9 — Strict UI boundary decoupling (Hexagonal).** No core unit may import a UI/OS
+  framework (`tkinter`, `pyautogui` window/native hooks, `keyboard`, canvas/widget types) or
+  call a toolkit threading API (`root.after`, Qt signals). All UI access must go through the
+  single `WilloWispCoreAPI` gate; all worker→UI events through the abstract `EventDispatcher`;
+  all native capabilities (screen capture, input, hotkeys) through **driven ports** bound per
+  environment. **Verification:** a mechanical import check (core packages must not import any
+  UI/OS-automation module) **and** a passing **headless CLI** drive of author→run→report with
+  no GUI toolkit loaded.
 
 ---
 
@@ -271,9 +289,16 @@ redesign).
    `_write_html_report`, and `auto_register_procedures` *before* they move.
 7. **B8** — add explicit "must-not-own" guardrails for the Part 3 H/M classes
    (especially `RunController`).
+8. **B9** — establish the strict Hexagonal UI boundary: a single `WilloWispCoreAPI` gate, an
+   abstract `EventDispatcher`, pure coordinate models, driven ports for native capabilities,
+   a core toolkit-import ban, and a headless CLI drive as proof.
 
-Once 1–7 are resolved, re-audit is expected to reach an approvable score (≥ ~85) and the
+Once 1–8 are resolved, re-audit is expected to reach an approvable score (≥ ~85) and the
 Migration phase can be authored.
+
+> **Note (post-audit):** Design **v3** (`RESTRUCTURE_DESIGN.md`) was revised to address
+> B1–B9 — including the Hexagonal boundary (§1.0–1.2), the App core/adapter split (§5), and
+> the geometry-vs-canvas split (§8). A re-audit against v3 is the next gate.
 
 > No implementation, migration steps, or redesign produced — this audit only determines
 > readiness.
