@@ -13,6 +13,7 @@ from iscs_workflow import (
     ProcedureType, ProcedureStatus, _LEGACY_METHOD_MAP, _category_for,
     LegacyCapabilityAdapter, LegacyExecContext, register_legacy_capabilities,
 )
+from adapters.driven.input import legacy_executors as _legacy_exec
 from iscs_core import CapabilityRegistry, StepStatus, StepResult
 
 
@@ -25,11 +26,14 @@ def test_map_covers_every_procedure_type():
     assert set(_LEGACY_METHOD_MAP) == set(ProcedureType)
 
 
-def test_every_mapped_method_exists_on_runner():
-    # Guards the refactored _execute_procedure: getattr(self, method) must resolve.
+def test_every_mapped_method_exists_in_adapter():
+    # M3.4: executors moved to the input adapter; getattr(legacy_executors, method)
+    # must resolve for both the LegacyCapabilityAdapter and the dispatcher fallback.
     for proc_type, method_name in _LEGACY_METHOD_MAP.items():
-        assert hasattr(wf.ProcedureRunner, method_name), \
-            f"{proc_type.value} → missing method {method_name}"
+        assert hasattr(_legacy_exec, method_name), \
+            f"{proc_type.value} → missing executor {method_name}"
+        assert not hasattr(wf.ProcedureRunner, method_name), \
+            f"{method_name} should no longer live on the engine"
 
 
 @pytest.mark.parametrize("proc_type,expected", [
@@ -75,22 +79,19 @@ def test_import_auto_registered_into_global_registry():
 #  Adapter execution — forwards to the executor, normalizes the return
 # ──────────────────────────────────────────────────────────────────────────────
 
-class _FakeRunner:
-    """Stands in for ProcedureRunner: records the call and returns a fixed tuple."""
-    def __init__(self, status, verify_results, screenshot):
-        self._ret = (status, verify_results, screenshot)
-        self.calls = []
+def test_adapter_forwards_and_maps_pass(monkeypatch):
+    # M3.4: the adapter resolves the executor on the legacy_executors module and
+    # passes the runner explicitly; stub it there.
+    calls = []
 
-    def _exec_stub(self, proc, exec_ctx, sampler_ok, log):
-        self.calls.append((proc, exec_ctx, sampler_ok))
+    def _exec_stub(runner, proc, exec_ctx, sampler_ok, log):
+        calls.append((runner, proc, exec_ctx, sampler_ok))
         log("ran stub")
-        return self._ret
+        return ProcedureStatus.PASS, [{"step": "x"}], "shot.png"
 
-
-def test_adapter_forwards_and_maps_pass():
-    runner = _FakeRunner(ProcedureStatus.PASS, [{"step": "x"}], "shot.png")
+    monkeypatch.setattr(_legacy_exec, "_exec_stub", _exec_stub, raising=False)
     adapter = LegacyCapabilityAdapter(ProcedureType.CLICK, "_exec_stub")
-    ctx = LegacyExecContext(runner=runner, proc="PROC", exec="EXEC", sampler_ok=True)
+    ctx = LegacyExecContext(runner="RUNNER", proc="PROC", exec="EXEC", sampler_ok=True)
 
     result = adapter.execute(ctx)
 
@@ -98,14 +99,16 @@ def test_adapter_forwards_and_maps_pass():
     assert result.status is StepStatus.PASS
     assert result.screenshot == "shot.png"
     assert result.data["verify_results"] == [{"step": "x"}]
-    assert runner.calls == [("PROC", "EXEC", True)]   # forwarded correctly
+    assert calls == [("RUNNER", "PROC", "EXEC", True)]   # runner forwarded explicitly
 
 
-def test_adapter_maps_lowercase_error_status_by_name():
+def test_adapter_maps_lowercase_error_status_by_name(monkeypatch):
     # ProcedureStatus.ERROR == "error" but StepStatus.ERROR == "ERROR".
-    runner = _FakeRunner(ProcedureStatus.ERROR, [], "")
+    monkeypatch.setattr(_legacy_exec, "_exec_stub",
+                        lambda runner, proc, exec_ctx, sampler_ok, log: (ProcedureStatus.ERROR, [], ""),
+                        raising=False)
     adapter = LegacyCapabilityAdapter(ProcedureType.DELAY, "_exec_stub")
-    result = adapter.execute(LegacyExecContext(runner=runner, proc=None, exec=None))
+    result = adapter.execute(LegacyExecContext(runner=None, proc=None, exec=None))
     assert result.status is StepStatus.ERROR
 
 

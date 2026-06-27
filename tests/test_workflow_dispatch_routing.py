@@ -11,6 +11,7 @@ import pytest
 
 import iscs_workflow as wf
 from iscs_workflow import ProcedureType, ProcedureStatus, ProcedureCategory, Procedure
+from adapters.driven.input import legacy_executors as _legacy_exec
 from iscs_core import CapabilityRegistry, CapabilityMeta, StepResult, StepStatus
 
 
@@ -85,11 +86,13 @@ def test_falls_back_to_legacy_when_key_unregistered(monkeypatch):
     runner = _runner()
     called = []
 
-    def fake_exec_delay(proc, ctx, sampler_ok, log):
+    # M3.4: the legacy executors live in the input adapter and take the runner
+    # explicitly; the dispatcher resolves them there, so stub it there.
+    def fake_exec_delay(runner_arg, proc, ctx, sampler_ok, log):
         called.append((proc, sampler_ok))
         return ProcedureStatus.PASS, [], "legacy.png"
 
-    runner._exec_delay = fake_exec_delay
+    monkeypatch.setattr(_legacy_exec, "_exec_delay", fake_exec_delay)
 
     result = runner._execute_procedure(_proc(), ctx=object(), sampler_ok=True)
 
@@ -101,9 +104,9 @@ def test_falls_back_to_legacy_when_key_unregistered(monkeypatch):
 def test_falls_back_when_registry_is_none(monkeypatch):
     monkeypatch.setattr(wf, "core_registry", None)  # simulate iscs_core unavailable
 
-    runner = _runner()
-    runner._exec_delay = lambda *a, **k: (ProcedureStatus.SKIP, [], "")
-    result = runner._execute_procedure(_proc(), ctx=object(), sampler_ok=False)
+    monkeypatch.setattr(_legacy_exec, "_exec_delay",
+                        lambda *a, **k: (ProcedureStatus.SKIP, [], ""))
+    result = _runner()._execute_procedure(_proc(), ctx=object(), sampler_ok=False)
     assert result.status == ProcedureStatus.SKIP
 
 

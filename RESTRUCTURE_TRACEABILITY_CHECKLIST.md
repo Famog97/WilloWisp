@@ -145,7 +145,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `_run_point` (112) → **decompose** `core/services/engine.py` (`PointExecutor`) — gated by M0.1
 - [ ] `_execute_procedure` (89) → **split** `core/services/engine.py` (`StepLifecycle` + `StepDispatcher`)
 - [ ] `_make_skip_result` (11) → `core/services/engine.py` (`PointExecutor`)
-- [ ] `_exec_trigger_alarm`/`_exec_reset_alarm`/`_exec_navigate_*`/`_exec_verify_*`/`_exec_delay`/`_exec_screenshot`/`_exec_click`/`_exec_right_click`/`_exec_hotkey`/`_exec_type_text` (the 19 `_exec_*`) → `core/services/engine.py` (`LegacyExecutorAdapters`, **quarantined**; real logic already lives in `plugins/`)
+- [x] `_exec_trigger_alarm`/`_exec_reset_alarm`/`_exec_navigate_*`/`_exec_verify_*`/`_exec_delay`/`_exec_screenshot`/`_exec_click`/`_exec_right_click`/`_exec_hotkey`/`_exec_type_text` (the 19 `_exec_*`) → **M3.4 extracted** to `adapters/driven/input/legacy_executors.py` (NOT core — they carry `pyautogui`; quarantined as the R-EXT-1 safety net). Rebound `self`→`runner`; `LegacyCapabilityAdapter` + the dispatcher fallback resolve them there. This removes the only `pyautogui` from the engine, unblocking the `ProcedureRunner`→`core/services/engine.py` move (still pending the `baru` tendrils: `_get_state_indices`/`build_expected`).
 
 ### 2.4 UI dialogs → `adapters/driving/ui_tkinter/`
 - [ ] `RegionPickerFrame` (10) → `adapters/driving/ui_tkinter/components/region_picker.py`

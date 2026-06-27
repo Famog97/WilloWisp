@@ -5,11 +5,15 @@ Drives a single step through _execute_procedure (with a stub executor, no live
 screen/device) and asserts the StepStarted / StepCompleted / Verification* events
 fire. Also verifies emission is isolated (a bad subscriber can't break a run) and
 that the runner defaults to the shared global bus.
+
+M3.4: the legacy executors moved to adapters/driven/input/legacy_executors.py and
+take the runner explicitly, so stubs are injected there (was runner._exec_*).
 """
 import threading
 
 import iscs_workflow as wf
 from iscs_workflow import ProcedureType, ProcedureStatus, ProcedureCategory, Procedure
+from adapters.driven.input import legacy_executors as le
 from iscs_core import (
     EventBus, CapabilityRegistry,
     StepStarted, StepCompleted, VerificationPassed, VerificationFailed,
@@ -26,8 +30,13 @@ def _runner(bus=None):
 
 
 def _force_legacy(monkeypatch):
-    # Empty registry → _execute_procedure falls back to the (stubbed) _exec_* method.
+    # Empty registry → _execute_procedure falls back to the (stubbed) legacy executor.
     monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())
+
+
+def _stub(monkeypatch, method_name, ret):
+    """Install a stub legacy executor (signature: runner, proc, ctx, sampler_ok, log)."""
+    monkeypatch.setattr(le, method_name, lambda runner, proc, ctx, so, log: ret)
 
 
 def test_step_started_and_completed_emitted(monkeypatch):
@@ -36,9 +45,9 @@ def test_step_started_and_completed_emitted(monkeypatch):
     bus.subscribe(StepStarted, started.append)
     bus.subscribe(StepCompleted, completed.append)
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_delay", (ProcedureStatus.PASS, [], ""))
 
     runner = _runner(bus)
-    runner._exec_delay = lambda proc, ctx, so, log: (ProcedureStatus.PASS, [], "")
     proc = Procedure(ProcedureType.DELAY, ProcedureCategory.UTILITY, "Wait")
 
     runner._execute_procedure(proc, ctx=object(), sampler_ok=False)
@@ -55,9 +64,9 @@ def test_verification_failed_event_emitted(monkeypatch):
     fails = []
     bus.subscribe(VerificationFailed, fails.append)
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_verify_alarm_panel", (ProcedureStatus.FAIL, [], ""))
 
     runner = _runner(bus)
-    runner._exec_verify_alarm_panel = lambda *a: (ProcedureStatus.FAIL, [], "")
     proc = Procedure(ProcedureType.VERIFY_ALARM_PANEL, ProcedureCategory.VERIFICATION, "Verify Panel")
 
     runner._execute_procedure(proc, ctx=object(), sampler_ok=False)
@@ -71,9 +80,9 @@ def test_verification_passed_event_emitted(monkeypatch):
     passes = []
     bus.subscribe(VerificationPassed, passes.append)
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_verify_alarm_panel", (ProcedureStatus.PASS, [], ""))
 
     runner = _runner(bus)
-    runner._exec_verify_alarm_panel = lambda *a: (ProcedureStatus.PASS, [], "")
     proc = Procedure(ProcedureType.VERIFY_ALARM_PANEL, ProcedureCategory.VERIFICATION, "Verify Panel")
 
     runner._execute_procedure(proc, ctx=object(), sampler_ok=False)
@@ -86,9 +95,9 @@ def test_action_step_emits_no_verification_event(monkeypatch):
     bus.subscribe(VerificationPassed, vpass.append)
     bus.subscribe(VerificationFailed, vfail.append)
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_delay", (ProcedureStatus.PASS, [], ""))
 
     runner = _runner(bus)
-    runner._exec_delay = lambda *a: (ProcedureStatus.PASS, [], "")
     runner._execute_procedure(
         Procedure(ProcedureType.DELAY, ProcedureCategory.UTILITY, "Wait"),
         ctx=object(), sampler_ok=False,
@@ -102,9 +111,9 @@ def test_bad_subscriber_does_not_break_run(monkeypatch):
         raise RuntimeError("subscriber blew up")
     bus.subscribe(StepStarted, boom)
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_delay", (ProcedureStatus.PASS, [], "ok.png"))
 
     runner = _runner(bus)
-    runner._exec_delay = lambda *a: (ProcedureStatus.PASS, [], "ok.png")
     result = runner._execute_procedure(
         Procedure(ProcedureType.DELAY, ProcedureCategory.UTILITY, "Wait"),
         ctx=object(), sampler_ok=False,
@@ -121,9 +130,9 @@ def test_runner_defaults_to_global_bus():
 
 def test_emission_disabled_when_bus_is_none(monkeypatch):
     _force_legacy(monkeypatch)
+    _stub(monkeypatch, "_exec_delay", (ProcedureStatus.SKIP, [], ""))
     runner = _runner()
     runner.event_bus = None                       # disable emission
-    runner._exec_delay = lambda *a: (ProcedureStatus.SKIP, [], "")
     # must not raise even though no bus is present
     result = runner._execute_procedure(
         Procedure(ProcedureType.DELAY, ProcedureCategory.UTILITY, "Wait"),
