@@ -126,14 +126,25 @@ the core-import guard (B9) passes for these packages, and the suite is green.
 |:--:|---|---|---|---|
 | [ ] | M3.1 | Engine | Extract step execution, dispatcher, step lifecycles, and run controls from legacy `ProcedureRunner`. | `core/services/engine.py` |
 | [ ] | M3.2 | Verification Orchestration | Extract `VerificationCoordinator` and pass/fail policies from `ISCSVerifier`. | `core/services/verifier.py` |
-| [ ] | M3.3 | Default-Flow Specification | Extract default flow generator (`auto_register_procedures`) from legacy `iscs_workflow.py`. | `core/services/import_service.py` |
+| [x] | M3.3 | Default-Flow Specification | Extract default flow generator (`auto_register_procedures`) from legacy `iscs_workflow.py`. *(Relocated; rule-per-step decomposition deferred.)* | `core/services/import_service.py` |
 | [ ] | M3.4 | Run Subsystem | Extract `SuiteRunner` orchestration from legacy `baru.py`. Collapses legacy run paths after B2 equivalence. | `core/services/run_coordinator.py` |
 | [ ] | M3.5 | Application Services | Extract workspace session profile state (closes `_clear_workspace`). | `core/services/workspace.py` |
-| [ ] | M3.6 | Core API Facade | Implement unified inbound gateway facade (`WilloWispCoreAPI`). Connects all core services. | `core/api.py` |
+| [x] | M3.6 | Core API Facade | Implement unified inbound gateway facade (`WilloWispCoreAPI`). Connects all core services. | `core/api.py` |
 
 **Exit M3 when:** the full author→run→report cycle runs headlessly through the facade with
 fake/local ports, the new run path is proven equivalent to the legacy one, and the suite is
 green. The legacy run path still exists (removed in M6).
+
+> **Progress (2026-06-26):** **M3.3 ✅** (`auto_register_procedures` → `core/services/import_service.py`).
+> **M3.6 ✅** — `core/api.py` `WilloWispCoreAPI` is the single inbound gate: catalogue
+> (`list_step_types`/`get_param_schema`/`list_report_templates`), config (`get`/`update`), `assets()`,
+> `build_default_flow`, `generate_report`, and events (`set_event_dispatcher`/`subscribe`/`emit`) all
+> work **headlessly** (`tests/test_core_api.py`, 9 tests; 289 total green + GUI smoke OK). Pure: no
+> UI/adapter imports — all collaborators injected. **Run control is an injection seam** (`start_suite`
+> etc. delegate to an injected `run_service`, raising until wired). **Remaining for a headless run:**
+> M3.4 — relocate `SuiteRunner`/`ProcedureRunner` out of `baru`/`iscs_workflow` (refactor: UI callbacks
+> → events, vestigial `_exec_*` pyautogui → `InputControlPort`). M3.1/M3.2/M3.5 are the deferred
+> decompositions.
 
 ---
 

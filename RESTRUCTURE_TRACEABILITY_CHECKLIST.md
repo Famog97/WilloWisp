@@ -123,7 +123,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [x] `_resolve_proc_type` (8) → `core/domain/flow.py` — **M2.1 DONE** (workflow shim) · [ ] `_category_for` (8) / `_noop_log` (2) → (stay engine-side / flow.py later)
 - [x] `register_flow_migrator` (3) / `_migrate_flow_dict` (25) + `FLOW_SCHEMA_VERSION`/`_FLOW_MIGRATORS` → `core/domain/flow.py` — **M2.1 DONE** (workflow shim) · [ ] `registry_step_coverage` (17) → `core/services/engine.py` (stays engine-side)
 - [x] `_next_io_id` (4) / `_next_step_id` (4) → `core/domain/flow.py` — **M2.1 DONE** (workflow shim)
-- [ ] `auto_register_procedures` (205) → **decompose** `core/services/import_service.py` (`DefaultFlowBuilder` + per-step `*Rule`s, FR-21) — gated by M0.1
+- [x] `auto_register_procedures` (205) → `core/services/import_service.py` — **M3.3 relocated** (workflow shim; gated by `test_workflow_autoregister` + golden). Decompose into `DefaultFlowBuilder` + per-step `*Rule`s (FR-21) deferred.
 - [ ] `_dynamic_catalogue` (29) → `core/api.py` (capability catalogue for `list_step_types`)
 - [ ] `_detect_monitors` (26) / `_monitor_index_for_point` (8) → `adapters/driven/perception/local_grab.py`
 - [ ] `capture_region_overlay` (89) → `adapters/driving/ui_tkinter/components/region_capture.py`
