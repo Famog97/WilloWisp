@@ -821,3 +821,67 @@ class SuiteRunner(threading.Thread):
             card_loop = getattr(sc, "card_loop", 1)
             self.on_progress(p_num, card_loop, s_idx+1, len(self.scenarios),
                              i+1, len(sc.iscs_points), point_id, overall)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  RUN SERVICE  (M4 — the facade's run_service seam over SuiteRunner)
+# ═════════════════════════════════════════════════════════════════════════════
+def _noop(*_a, **_k):
+    return None
+
+
+class SuiteRunService:
+    """Adapts SuiteRunner's per-run thread lifecycle to the WilloWispCoreAPI
+    ``run_service`` contract (``start``/``stop``/``pause``/``resume``/``get_state``).
+
+    A composition root (the CLI or the Tk app) injects the collaborators — config,
+    the protocol manager, the InputControlPort, the event bus, and optional
+    log/progress callbacks — once; each ``start(scenarios, …)`` then spins up a
+    SuiteRunner for that run. UI-agnostic: callbacks default to no-ops, so a headless
+    caller drives a full author→run→report cycle without any GUI.
+    """
+
+    def __init__(self, *, config, protocols, monitors=None, input_control=None,
+                 event_bus=None, on_log=None, on_progress=None):
+        self._config     = config
+        self._protocols  = protocols
+        self._monitors   = monitors or []
+        self._input      = input_control
+        self._bus        = event_bus if event_bus is not None else CORE_BUS
+        self._on_log     = on_log or _noop
+        self._on_progress = on_progress or _noop
+        self._active = None     # the SuiteRunner of the current/last run
+
+    def start(self, scenarios, *, monitors=None, suite_title="", rerun_failed_count=0):
+        runner = SuiteRunner(
+            scenarios, monitors or self._monitors, self._protocols, self._config,
+            _noop, self._on_progress, _noop, _noop, _noop, self._on_log,
+            suite_title=suite_title, rerun_failed_count=rerun_failed_count,
+            event_bus=self._bus, input_control=self._input,
+        )
+        self._active = runner
+        runner.start()
+        return runner
+
+    def stop(self):
+        if self._active is not None:
+            self._active.stop()
+
+    def pause(self):
+        if self._active is not None:
+            self._active.pause()
+
+    def resume(self):
+        if self._active is not None:
+            self._active.resume()
+
+    def get_state(self) -> str:
+        r = self._active
+        if r is None or not r.is_alive():
+            return "idle"
+        return "paused" if r.is_paused else "running"
+
+    def join(self, timeout=None):
+        """Block until the active run finishes (for synchronous CLI/headless callers)."""
+        if self._active is not None:
+            self._active.join(timeout)

@@ -154,7 +154,7 @@ green. The legacy run path still exists (removed in M6).
 
 | Status | Step | Action | Gate | Proves |
 |:--:|---|---|---|:--:|
-| [ ] | M4.1 | CLI Composition Root: Build the core, inject synchronous `EventDispatcher` and local driven adapters. | CLI launches cleanly in headless environment | R-HEX-1/3 startup |
+| [x] | M4.1 | CLI Composition Root: Build the core, inject synchronous `EventDispatcher` and local driven adapters. *(`adapters/driving/cli/composition.py` `build_core_api()`; `SuiteRunService` wired as the facade `run_service` — `start_suite` drives a real run headlessly. Closes the M3.4 run_service seam.)* | CLI launches cleanly in headless environment | R-HEX-1/3 startup |
 | [ ] | M4.2 | CLI Commands: Implement console inputs to drive import, flow-edit, run, and report generation. | E2E CLI run produces identical report output | R-HEX-1 |
 | [ ] | M4.3 | B9 Proof (Headless Check): Enforce absolute import bans. A full suite run occurs with zero GUI libraries loaded. | Import-ban check + CLI integration tests green | B9 |
 | [ ] | M4.4 | B10 Proof (Drop-in Tests): Add a dummy capability (with `params_schema`), custom protocol, and resolver. | Tests green with zero existing files edited | B10 |
