@@ -12,6 +12,7 @@ import pytest
 import iscs_workflow as wf
 from iscs_workflow import ProcedureType, ProcedureStatus, ProcedureCategory, Procedure
 from adapters.driven.input import legacy_executors as _legacy_exec
+from core.services import engine as _eng   # M3.4: dispatcher reads core_registry here
 from iscs_core import CapabilityRegistry, CapabilityMeta, StepResult, StepStatus
 
 
@@ -44,7 +45,7 @@ def test_execute_routes_through_registry(monkeypatch):
 
     reg = CapabilityRegistry()
     reg.register(Spy())
-    monkeypatch.setattr(wf, "core_registry", reg)
+    monkeypatch.setattr(_eng, "core_registry", reg)
 
     runner = _runner()
     # If routing used the legacy method instead of the registry, this would fire:
@@ -70,7 +71,7 @@ def test_step_status_error_round_trips_to_procedure_status(monkeypatch):
 
     reg = CapabilityRegistry()
     reg.register(ErrCap())
-    monkeypatch.setattr(wf, "core_registry", reg)
+    monkeypatch.setattr(_eng, "core_registry", reg)
 
     result = _runner()._execute_procedure(_proc(), ctx=object(), sampler_ok=False)
     assert result.status == ProcedureStatus.ERROR
@@ -81,7 +82,7 @@ def test_step_status_error_round_trips_to_procedure_status(monkeypatch):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_falls_back_to_legacy_when_key_unregistered(monkeypatch):
-    monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())  # empty → no cap
+    monkeypatch.setattr(_eng, "core_registry", CapabilityRegistry())  # empty → no cap
 
     runner = _runner()
     called = []
@@ -102,7 +103,7 @@ def test_falls_back_to_legacy_when_key_unregistered(monkeypatch):
 
 
 def test_falls_back_when_registry_is_none(monkeypatch):
-    monkeypatch.setattr(wf, "core_registry", None)  # simulate iscs_core unavailable
+    monkeypatch.setattr(_eng, "core_registry", None)  # simulate iscs_core unavailable
 
     monkeypatch.setattr(_legacy_exec, "_exec_delay",
                         lambda *a, **k: (ProcedureStatus.SKIP, [], ""))
@@ -112,7 +113,7 @@ def test_falls_back_when_registry_is_none(monkeypatch):
 
 def test_unknown_proc_type_with_empty_registry_errors(monkeypatch):
     # No capability AND no legacy method → caught and surfaced as ERROR.
-    monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())
+    monkeypatch.setattr(_eng, "core_registry", CapabilityRegistry())
 
     runner = _runner()
     bad = _proc()

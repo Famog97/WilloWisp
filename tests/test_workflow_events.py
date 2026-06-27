@@ -14,6 +14,7 @@ import threading
 import iscs_workflow as wf
 from iscs_workflow import ProcedureType, ProcedureStatus, ProcedureCategory, Procedure
 from adapters.driven.input import legacy_executors as le
+from core.services import engine as _eng   # M3.4: dispatcher reads core_registry here
 from iscs_core import (
     EventBus, CapabilityRegistry,
     StepStarted, StepCompleted, VerificationPassed, VerificationFailed,
@@ -31,7 +32,7 @@ def _runner(bus=None):
 
 def _force_legacy(monkeypatch):
     # Empty registry → _execute_procedure falls back to the (stubbed) legacy executor.
-    monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())
+    monkeypatch.setattr(_eng, "core_registry", CapabilityRegistry())
 
 
 def _stub(monkeypatch, method_name, ret):

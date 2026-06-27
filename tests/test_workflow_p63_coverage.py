@@ -14,6 +14,8 @@ import pytest
 
 import iscs_workflow as wf
 from iscs_workflow import ProcedureType, ProcedureStatus, ProcedureCategory, Procedure
+from adapters.driven.input import legacy_executors as _legacy_exec
+from core.services import engine as _eng   # M3.4: dispatcher/coverage read core_registry here
 from iscs_core import CapabilityRegistry, CapabilityMeta, StepResult, StepStatus
 
 
@@ -56,10 +58,10 @@ def test_coverage_global_registry_is_complete():
 # ── loud fallback (NFR-9) ─────────────────────────────────────────────────────--
 
 def test_fallback_logs_warning_when_registry_present_but_key_missing(monkeypatch):
-    monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())  # present but empty
+    monkeypatch.setattr(_eng, "core_registry", CapabilityRegistry())  # present but empty
+    monkeypatch.setattr(_legacy_exec, "_exec_delay", lambda *a, **k: (ProcedureStatus.PASS, [], ""))
     logs = []
     runner = _runner(on_log=lambda m: logs.append(m))
-    runner._exec_delay = lambda *a, **k: (ProcedureStatus.PASS, [], "")
 
     runner._execute_procedure(_proc(), ctx=object(), sampler_ok=False)
 
@@ -75,7 +77,7 @@ def test_no_warning_on_normal_registry_path(monkeypatch):
 
     reg = CapabilityRegistry()
     reg.register(Cap())
-    monkeypatch.setattr(wf, "core_registry", reg)
+    monkeypatch.setattr(_eng, "core_registry", reg)
     logs = []
     runner = _runner(on_log=lambda m: logs.append(m))
 
@@ -86,10 +88,10 @@ def test_no_warning_on_normal_registry_path(monkeypatch):
 
 def test_no_warning_when_registry_absent(monkeypatch):
     # iscs_core unavailable → expected pure-legacy mode, so no per-step warning.
-    monkeypatch.setattr(wf, "core_registry", None)
+    monkeypatch.setattr(_eng, "core_registry", None)
+    monkeypatch.setattr(_legacy_exec, "_exec_delay", lambda *a, **k: (ProcedureStatus.PASS, [], ""))
     logs = []
     runner = _runner(on_log=lambda m: logs.append(m))
-    runner._exec_delay = lambda *a, **k: (ProcedureStatus.PASS, [], "")
 
     runner._execute_procedure(_proc(), ctx=object(), sampler_ok=False)
 

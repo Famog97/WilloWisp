@@ -10,6 +10,7 @@ from iscs_workflow import (
     ProcedureType, ProcedureCategory, ProcedureStatus, Procedure,
     _resolve_proc_type, _DynamicProcType,
 )
+from core.services import engine as _eng   # M3.4: dispatcher reads core_registry here
 from iscs_core import CapabilityRegistry, CapabilityMeta, StepResult, StepStatus
 
 
@@ -74,7 +75,7 @@ def test_dynamic_step_executes_via_registered_plugin(monkeypatch):
 
     reg = CapabilityRegistry()
     reg.register(PluginCap())
-    monkeypatch.setattr(wf, "core_registry", reg)
+    monkeypatch.setattr(_eng, "core_registry", reg)   # drives the dispatcher
 
     proc = Procedure(proc_type=_DynamicProcType("my_plugin_step"),
                      category=ProcedureCategory.ACTION, name="X")
@@ -84,7 +85,7 @@ def test_dynamic_step_executes_via_registered_plugin(monkeypatch):
 
 
 def test_dynamic_step_without_handler_errors_clearly(monkeypatch):
-    monkeypatch.setattr(wf, "core_registry", CapabilityRegistry())  # empty
+    monkeypatch.setattr(_eng, "core_registry", CapabilityRegistry())  # empty — drives the dispatcher
     proc = Procedure(proc_type=_DynamicProcType("nobody_handles_this"),
                      category=ProcedureCategory.ACTION, name="X")
     res = _runner()._execute_procedure(proc, ctx=object(), sampler_ok=False)
