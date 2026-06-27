@@ -51,8 +51,8 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 
 ### 1.2 Protocol layer
 - [x] `BaseProtocol` (all 6 methods) → `core/ports/protocol.py` — **M1.4 DONE** (promoted to `ProtocolPort`; `baru` re-exports `BaseProtocol` via shim; `ModbusProtocol` still subclasses it)
-- [ ] `ModbusProtocol.__init__` / `_start_server_thread` / `_run_server` / `stop` / `_on_packet` / `_on_connect` / `_get_slave` / `_write_coil_or_reg` / `trigger_alarm` / `reset_alarm` → `adapters/driven/protocol/modbus.py`
-- [ ] `ProtocolManager.__init__` / `register_protocol` / `get_protocol` / `stop_all` → `adapters/driven/protocol/manager.py`
+- [x] `ModbusProtocol.__init__` / `_start_server_thread` / `_run_server` / `stop` / `_on_packet` / `_on_connect` / `_get_slave` / `_write_coil_or_reg` / `trigger_alarm` / `reset_alarm` → `adapters/driven/protocol/modbus.py` — **M3.4 relocated** (verbatim; pymodbus guarded; `baru` re-exports as shim)
+- [x] `ProtocolManager.__init__` / `register_protocol` / `get_protocol` / `stop_all` → `adapters/driven/protocol/manager.py` — **M3.4 relocated** (imports `ModbusProtocol`; `baru` re-exports as shim)
 
 ### 1.3 Domain models
 - [x] `VerifyResult.__init__` / `to_dict` → `core/domain/results.py` — **M2.1 DONE** (baru shim)
