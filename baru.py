@@ -923,7 +923,7 @@ from core.domain.scenario import Scenario
 from core.services.evidence_collector import FailureEvidenceCollector
 
 class SuiteRunner(threading.Thread):
-    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None):
+    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None, input_control=None):
         super().__init__(daemon=True)
         self.scenarios, self.monitors, self.protocols = scenarios, monitors, protocols
         self.rerun_failed_count = rerun_failed_count  # -1 = till pass, 0 = disabled, N = N times
@@ -944,6 +944,12 @@ class SuiteRunner(threading.Thread):
         # Lifecycle event bus (FR-28). Additive: events are published alongside the
         # existing recorder callbacks / report call; nothing depends on a subscriber.
         self.event_bus = event_bus if event_bus is not None else CORE_BUS
+        # M3.4: mouse/keyboard goes through the InputControlPort (the only place
+        # pyautogui lives), so SuiteRunner carries no OS-automation import itself.
+        if input_control is None:
+            from adapters.driven.input.pyautogui_input import PyAutoGuiInput
+            input_control = PyAutoGuiInput()
+        self._input = input_control
 
     def _emit(self, event):
         """Publish a lifecycle event if a bus + event class are present. Never
@@ -1335,11 +1341,11 @@ class SuiteRunner(threading.Thread):
                 result = {"x": x, "y": y, "label": label, "status": "ok", "screenshot": ""}
                 
                 try:
-                    pyautogui.click(x, y)
+                    self._input.click(x, y)
                     time.sleep(0.06)
-                    
+
                     # Check Mouse Drift Safety
-                    ax, ay = pyautogui.position()
+                    ax, ay = self._input.position()
                     if abs(ax - x) + abs(ay - y) > MOUSE_DRIFT_PX:
                         self.pause("mouse moved")
                         self.on_paused("mouse moved")
@@ -1405,7 +1411,7 @@ class SuiteRunner(threading.Thread):
 
             def _click_home():
                 if hm_x != 0 and hm_y != 0 and PYAUTOGUI_AVAILABLE:
-                    pyautogui.click(hm_x, hm_y)
+                    self._input.click(hm_x, hm_y)
                     self._sleep(nav_wait)
 
             if not self._pause_event.is_set():
@@ -1472,7 +1478,7 @@ class SuiteRunner(threading.Thread):
                 if not self._stop_event.is_set():
                     if al_x != 0 or al_y != 0:
                         _click_home()
-                        if PYAUTOGUI_AVAILABLE: pyautogui.click(al_x, al_y); self._sleep(nav_wait)
+                        if PYAUTOGUI_AVAILABLE: self._input.click(al_x, al_y); self._sleep(nav_wait)
                         al_zone = zones_dict.get("alarm_list")
                         if al_zone:
                             _al_bbox = (al_zone.x1, al_zone.y1, al_zone.x2, al_zone.y2)
@@ -1495,7 +1501,7 @@ class SuiteRunner(threading.Thread):
                 if not self._stop_event.is_set():
                     if ev_x != 0 or ev_y != 0:
                         _click_home()
-                        if PYAUTOGUI_AVAILABLE: pyautogui.click(ev_x, ev_y); self._sleep(nav_wait)
+                        if PYAUTOGUI_AVAILABLE: self._input.click(ev_x, ev_y); self._sleep(nav_wait)
                         ev_zone = zones_dict.get("event_list")
                         if ev_zone:
                             _ev_bbox = (ev_zone.x1, ev_zone.y1, ev_zone.x2, ev_zone.y2)
@@ -1520,8 +1526,8 @@ class SuiteRunner(threading.Thread):
                         _click_home()
                         if PYAUTOGUI_AVAILABLE:
                             click_delay = self.config.get("click_delay", 1.5)
-                            pyautogui.rightClick(rc_x, rc_y); self._sleep(click_delay)
-                            pyautogui.click(pg_x, pg_y); self._sleep(nav_wait)
+                            self._input.right_click(rc_x, rc_y); self._sleep(click_delay)
+                            self._input.click(pg_x, pg_y); self._sleep(nav_wait)
                         eq_zone = zones_dict.get("equipment_page")
                         if eq_zone:
                             eq_res = verifier.verify_inspector(expected_alarm, eq_zone, sc_dir, point_idx=i)

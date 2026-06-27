@@ -8,11 +8,17 @@ host. The core never imports pyautogui or an OS hook.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 
 class InputControlPort(ABC):
     @abstractmethod
     def click(self, x: int, y: int) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def position(self) -> Tuple[int, int]:
+        """Current pointer position (x, y) — for mouse-drift safety checks."""
         raise NotImplementedError
 
     @abstractmethod
