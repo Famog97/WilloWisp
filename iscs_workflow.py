@@ -2996,43 +2996,5 @@ class _AssetPickerDialog:
 #  INTEGRATION HELPERS  (drop-in replacements for baru.py methods)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def build_runner_from_scenario(sc, verifier, handler, config, on_log,
-                                stop_event, pause_event) -> ProcedureRunner:
-    """
-    Convenience factory.  Builds or reuses the ProcedureFlow attached to `sc`,
-    then returns a ready-to-use ProcedureRunner.
-
-    Attaches flow to sc.procedure_flow so it persists across loop iterations
-    and can be inspected/edited via the dialog.
-    """
-    card_cfg = getattr(sc, "card_cfg", {})
-    nav      = card_cfg.get("navigation", {})
-
-    # Build zones_dict (same logic as SuiteRunner._run_scenario)
-    zones_dict: dict = {}
-    for page_zones in getattr(sc, "zones_per_page", {}).values():
-        for zt, z in page_zones.items():
-            if zt not in zones_dict:
-                zones_dict[zt] = z
-    for z in getattr(sc, "zones", []):
-        if z.zone_type not in zones_dict:
-            zones_dict[z.zone_type] = z
-
-    # Ensure the verifier is aware of the stop signal for its internal loops
-    if hasattr(verifier, "stop_event"):
-        verifier.stop_event = stop_event
-
-    # Reuse existing flow or auto-register defaults
-    if not getattr(sc, "procedure_flow", None):
-        sc.procedure_flow = auto_register_procedures(sc, zones_dict, nav)
-
-    runner = ProcedureRunner(
-        flow       = sc.procedure_flow,
-        verifier   = verifier,
-        handler    = handler,
-        config     = config,
-        on_log     = on_log,
-        stop_event = stop_event,
-        pause_event= pause_event,
-    )
-    return runner
+# M3.4: build_runner_from_scenario relocated to core/services/engine.py; shim.
+from core.services.engine import build_runner_from_scenario
