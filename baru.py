@@ -1021,10 +1021,11 @@ class SuiteRunner(threading.Thread):
 
         if mode == "sequence" and pt_data and pt_data.get("zone"):
             z = pt_data["zone"]
-            x1 = max(mon.x, z.x1 - WIDE_CROP_PAD)
-            y1 = max(mon.y, z.y1 - WIDE_CROP_PAD)
-            x2 = min(mon.x + mon.width, z.x2 + WIDE_CROP_PAD)
-            y2 = min(mon.y + mon.height, z.y2 + WIDE_CROP_PAD)
+            pad = self.config.get("wide_crop_pad", 200)   # M3.4: was module global WIDE_CROP_PAD
+            x1 = max(mon.x, z.x1 - pad)
+            y1 = max(mon.y, z.y1 - pad)
+            x2 = min(mon.x + mon.width, z.x2 + pad)
+            y2 = min(mon.y + mon.height, z.y2 + pad)
             bbox = (x1, y1, x2, y2)
         else:
             bbox = (mon.x, mon.y, mon.x + mon.width, mon.y + mon.height)
@@ -1348,14 +1349,14 @@ class SuiteRunner(threading.Thread):
 
                     # Check Mouse Drift Safety
                     ax, ay = self._input.position()
-                    if abs(ax - x) + abs(ay - y) > MOUSE_DRIFT_PX:
+                    if abs(ax - x) + abs(ay - y) > self.config.get("mouse_drift_px", 15):
                         self.pause("mouse moved")
                         self.on_paused("mouse moved")
                         self._pause_event.wait(timeout=0.2)
                         if self._stop_event.is_set(): break
 
                     # Capture screenshot after a small delay
-                    time.sleep(SCREENSHOT_DELAY)
+                    time.sleep(self.config.get("screenshot_delay", 0.25))
                     result["screenshot"] = self._take_screenshot(sc_dir, i, f"click_{label}", mon, pt, sc.mode)
                 except Exception as ex:
                     result["status"] = f"error: {ex}"
@@ -1364,7 +1365,7 @@ class SuiteRunner(threading.Thread):
                 sc_results.append(result)
                 self.on_progress(p_num, self.loop_count, s_idx+1, len(self.scenarios), i+1, len(pts), x, y)
                 
-                rem = CLICK_DELAY - SCREENSHOT_DELAY - 0.06
+                rem = self.config.get("click_delay", 1.5) - self.config.get("screenshot_delay", 0.25) - 0.06
                 if rem > 0: time.sleep(rem)
                 
             # Write scenario JSON report
