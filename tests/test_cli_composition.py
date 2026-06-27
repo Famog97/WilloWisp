@@ -78,3 +78,32 @@ def test_composition_builds_without_tkinter():
     out = subprocess.run([sys.executable, "-c", code],
                          capture_output=True, text=True, cwd=str(ROOT))
     assert "HEADLESS_OK" in out.stdout, f"stdout={out.stdout!r}\nstderr={out.stderr!r}"
+
+
+def test_b9_suite_run_loads_zero_gui_libs():
+    # B9: a suite run goes through the facade with NO GUI toolkit ever imported.
+    code = (
+        "import sys, tempfile, pathlib\n"
+        "from adapters.driving.cli.composition import build_core_api\n"
+        "from core.ports.input_control import InputControlPort\n"
+        "class I(InputControlPort):\n"
+        "    def click(self,x,y): pass\n"
+        "    def position(self): return (0,0)\n"
+        "    def right_click(self,x,y): pass\n"
+        "    def hotkey(self,*k): pass\n"
+        "    def type_text(self,t,interval=0.0): pass\n"
+        "class P:\n"
+        "    def get_protocol(self,n): return None\n"
+        "    def stop_all(self): pass\n"
+        "d = pathlib.Path(tempfile.mkdtemp())\n"
+        "api = build_core_api(config_path=d/'c.json', base_dir=d, protocols=P(), input_control=I(), assets=None)\n"
+        "api.start_suite([])\n"
+        "api._run.join(timeout=15)\n"
+        "assert api.get_run_state() == 'idle'\n"
+        "leaked = [m for m in sys.modules if m=='tkinter' or m.startswith('tkinter.')]\n"
+        "assert not leaked, leaked\n"
+        "print('B9_OK')\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code],
+                         capture_output=True, text=True, cwd=str(ROOT))
+    assert "B9_OK" in out.stdout, f"stdout={out.stdout!r}\nstderr={out.stderr!r}"
