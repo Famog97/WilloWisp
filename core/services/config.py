@@ -90,3 +90,25 @@ class SeverityColorClassifier:
 
     def entry(self, severity) -> Optional[dict]:
         return self._m.get(str(severity))
+
+
+# ── Output paths (M3.4) ──────────────────────────────────────────────────────
+# The app base dir (where baru.py / the frozen exe lives) is an application fact,
+# so the composition root injects it via set_base_dir() at startup (mirrors the
+# asset store's set_app_dir). Core code that writes evidence asks get_log_dir().
+_BASE_DIR: Optional[Path] = None
+
+
+def set_base_dir(path) -> None:
+    """Composition root sets the application base directory once at startup."""
+    global _BASE_DIR
+    _BASE_DIR = Path(path)
+
+
+def get_log_dir() -> Path:
+    """The test-logs output directory (created on demand). Falls back to CWD if a
+    base dir was never injected (e.g. a bare headless invocation)."""
+    base = _BASE_DIR if _BASE_DIR is not None else Path.cwd()
+    d = base / "test_logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
