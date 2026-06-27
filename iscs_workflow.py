@@ -518,7 +518,8 @@ class ProcedureRunner:
         return results
         
     def _run_point(self, pt: dict, idx: int, sc_dir: Path) -> ExecutionTrace:
-        from baru import _get_state_indices, build_expected  # late import — keeps module independent
+        # M3.4: expected-state helpers now live in core (no longer a baru tendril).
+        from core.services.expected_state import _get_state_indices, build_expected
 
         point_id = pt.get("point_id", f"pt_{idx}")
         trace    = ExecutionTrace(point_id=point_id, start_time=datetime.datetime.now())
@@ -610,7 +611,7 @@ class ProcedureRunner:
         if trace.overall == "FAIL":
             all_verify = [vr for pr in trace.results for vr in pr.verify_results]
             try:
-                from baru import FailureEvidenceCollector
+                from core.services.evidence_collector import FailureEvidenceCollector
                 import datetime as _dt
                 diag = FailureEvidenceCollector.collect(
                     session_dir   = sc_dir,

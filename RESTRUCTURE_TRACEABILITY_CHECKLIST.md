@@ -40,7 +40,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `init_test_run_log` (17) → `core/services/run_coordinator.py` (`EvidencePathManager`)
 - [ ] `_normalize` (3) → `core/services/report_service.py`
 - [x] `_ocr_canon` (11) / `_ocr_contains` (20) / `_ocr_fuzzy_contains` (27) → `core/services/text_match.py` (`TextMatcher`) — **M2.4 DONE** (baru shim; tested by `test_ocr_match`)
-- [ ] `_find_state_table_cols` (20) / `_extract_states` (17) / `_get_state_indices` (19) / `_get_expected_for_value` (20) / `build_expected` (29) → `core/services/import_service.py` (IO-point expected-state derivation)
+- [ ] `_find_state_table_cols` (20) / `_extract_states` (17) → `core/services/import_service.py` (IO-list parsing) · [x] `_get_state_indices` (19) / `_get_expected_for_value` (20) / `build_expected` (29) → **M3.4 relocated** to `core/services/expected_state.py` (pure; imports `SEVERITY_MATRIX`; baru re-exports as shims). Cuts the engine's last `baru` import — `_run_point` now pulls expected-state + `FailureEvidenceCollector` from `core`, so `ProcedureRunner` is `baru`-free.
 - [ ] `db_session` (13) / `_metadata_get_db` (47) / `_migrate_columns` (12) / `_metadata_file_hash` (9) → `adapters/driven/persistence/metadata_store.py`
 - [ ] `_metadata_save_profile` (46) / `_metadata_list_profiles` (10) / `_metadata_load_profile` (27) / `_metadata_delete_profile` (8) → `adapters/driven/persistence/metadata_store.py`
 - [ ] `detect_header_row` (23) / `auto_map_columns` (17) → `core/services/import_service.py`
