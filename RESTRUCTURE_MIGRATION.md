@@ -127,7 +127,7 @@ the core-import guard (B9) passes for these packages, and the suite is green.
 | [x] | M3.1 | Engine | Extract step execution, dispatcher, step lifecycles, and run controls from legacy `ProcedureRunner`. *(Relocated whole, behind shims; god-method decomposition deferred. Engine now imports headlessly — no tkinter/pyautogui.)* | `core/services/engine.py` |
 | [ ] | M3.2 | Verification Orchestration | Extract `VerificationCoordinator` and pass/fail policies from `ISCSVerifier`. | `core/services/verifier.py` |
 | [x] | M3.3 | Default-Flow Specification | Extract default flow generator (`auto_register_procedures`) from legacy `iscs_workflow.py`. *(Relocated; rule-per-step decomposition deferred.)* | `core/services/import_service.py` |
-| [ ] | M3.4 | Run Subsystem | Extract `SuiteRunner` orchestration from legacy `baru.py`. Collapses legacy run paths after B2 equivalence. | `core/services/run_coordinator.py` |
+| [x] | M3.4 | Run Subsystem | Extract `SuiteRunner` orchestration from legacy `baru.py`. *(Relocated to core, imports headlessly: input via `InputControlPort`, HUD via callback, paths via `get_log_dir()`, optional deps guarded. Facade `run_service` wiring is the remaining sub-step; legacy run path removed in M6.)* | `core/services/run_coordinator.py` |
 | [ ] | M3.5 | Application Services | Extract workspace session profile state (closes `_clear_workspace`). | `core/services/workspace.py` |
 | [x] | M3.6 | Core API Facade | Implement unified inbound gateway facade (`WilloWispCoreAPI`). Connects all core services. | `core/api.py` |
 

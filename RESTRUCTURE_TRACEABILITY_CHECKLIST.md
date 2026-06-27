@@ -37,7 +37,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `_load_template` (9) / `_save_template` (12) → `adapters/driven/persistence/` (template store)
 - [ ] `initialize_tesseract` (6) → `adapters/driven/perception/tesseract_ocr.py`
 - [x] `save_config` (7) → `core/services/config.py` (`ConfigProvider`) — **M2.2 DONE** (baru shim; `SEVERITY_MATRIX`/`APP_CONFIG` now backed by `core.services.config`; `SeverityColorClassifier` added for M2.4)
-- [ ] `init_test_run_log` (17) → `core/services/run_coordinator.py` (`EvidencePathManager`)
+- [x] `init_test_run_log` (17) → `core/services/run_coordinator.py` — **M3.4 relocated** (per-suite file logger; baru re-exports as shim)
 - [ ] `_normalize` (3) → `core/services/report_service.py`
 - [x] `_ocr_canon` (11) / `_ocr_contains` (20) / `_ocr_fuzzy_contains` (27) → `core/services/text_match.py` (`TextMatcher`) — **M2.4 DONE** (baru shim; tested by `test_ocr_match`)
 - [ ] `_find_state_table_cols` (20) / `_extract_states` (17) → `core/services/import_service.py` (IO-list parsing) · [x] `_get_state_indices` (19) / `_get_expected_for_value` (20) / `build_expected` (29) → **M3.4 relocated** to `core/services/expected_state.py` (pure; imports `SEVERITY_MATRIX`; baru re-exports as shims). Cuts the engine's last `baru` import — `_run_point` now pulls expected-state + `FailureEvidenceCollector` from `core`, so `ProcedureRunner` is `baru`-free.
@@ -46,7 +46,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `detect_header_row` (23) / `auto_map_columns` (17) → `core/services/import_service.py`
 - [ ] `ocr_analyze_image` (2) / `ocr_preprocess` (2) / `ocr_run` (2) → `adapters/driven/perception/tesseract_ocr.py`
 - [ ] `detect_monitors` (13) / `get_physical_monitor_rects` (11) / `match_physical_rect` (3) → `adapters/driven/perception/local_grab.py` (screen-info)
-- [ ] `generate_points` (18) → `core/services/run_coordinator.py` (grid/sequence point generation)
+- [x] `generate_points` (18) → `core/services/run_coordinator.py` — **M3.4 relocated** (grid/sequence point generation; baru re-exports as shim)
 - [ ] `zone_has_points` (5) → `core/domain/zone.py`
 
 ### 1.2 Protocol layer
@@ -83,13 +83,14 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [~] `FailureEvidenceCollector.collect` (220) → `core/services/evidence_collector.py` — **M2.6 relocated** (whole class moved verbatim, rewired off baru PIL globals; baru shim; per-artifact-collector split deferred)
 
 ### 1.6 Run engines (→ one canonical path; legacy collapses, removed M6)
-- [ ] `SuiteRunner.__init__` / `_emit` / `stop` / `_sleep` / pause/resume/is_paused → `core/services/run_coordinator.py` (`SuiteExecutionThread` + `RunControl`)
-- [ ] `SuiteRunner._on_event_card_started` / `_on_event_card_completed` → `core/services/run_coordinator.py` (`RecorderCoordinator`)
-- [ ] `SuiteRunner._take_screenshot` (30) → **split** `adapters/driven/perception/local_grab.py` + `core/services/run_coordinator.py` (`EvidencePathManager`)
-- [ ] `SuiteRunner.run` (167) → **decompose** `core/services/run_coordinator.py` (`SuiteExecutionThread`/`SuiteScheduler`/`PointRunCoordinator`) — gated by M0.1
-- [ ] `SuiteRunner._run_scenario` (160) → collapse into the canonical scheduler (B2)
-- [ ] `SuiteRunner._collect_failed_point_ids` (17) → `core/services/run_coordinator.py` (`RerunController`)
-- [ ] `SuiteRunner._run_scenario_legacy_iscs` (232) → **REMOVE in M6** after B2 equivalence
+**M3.4 RELOCATED** — whole `SuiteRunner` moved to `core/services/run_coordinator.py` and imports headlessly (`tests/test_engine_headless.py`): input via injected `InputControlPort` (slice 1), HUD via `on_proto_status` callback (slice 2), tuning consts via config (slice 3), paths via `get_log_dir()` + `generate_points` to core (slice 4), PIL/pandas/FrameSampler/events guarded (slice 5). baru re-exports as a shim. God-method **decomposition deferred** (the `SuiteExecutionThread`/`SuiteScheduler`/`RerunController` split below is the future quality pass).
+- [x] `SuiteRunner.__init__` / `_emit` / `stop` / `_sleep` / pause/resume/is_paused → `core/services/run_coordinator.py` (relocated; `RunControl` split deferred)
+- [x] `SuiteRunner._on_event_card_started` / `_on_event_card_completed` → `core/services/run_coordinator.py` (relocated; `RecorderCoordinator` split deferred)
+- [x] `SuiteRunner._take_screenshot` (30) → `core/services/run_coordinator.py` (relocated; **split** to `adapters/driven/perception/local_grab.py` deferred — PIL guarded in-module for now)
+- [x] `SuiteRunner.run` (167) → `core/services/run_coordinator.py` (relocated; **decompose** → scheduler/coordinator deferred, gated by M0.1)
+- [x] `SuiteRunner._run_scenario` (160) → `core/services/run_coordinator.py` (relocated; collapse into canonical scheduler (B2) deferred)
+- [x] `SuiteRunner._collect_failed_point_ids` (17) → `core/services/run_coordinator.py` (relocated; `RerunController` split deferred)
+- [x] `SuiteRunner._run_scenario_legacy_iscs` (232) → relocated (now port-driven, no direct pyautogui); **REMOVE in M6** after B2 equivalence
 - [ ] `ISCS_Engine.*` (run 318 + 10 helpers) → collapse into `core/services/run_coordinator.py`; **REMOVE legacy copy in M6** (B2)
 - [ ] `ClickEngine.*` (run 63 + 6 helpers) → `core/services/run_coordinator.py` (grid/sequence run mode)
 

@@ -28,3 +28,21 @@ def test_engine_module_imports_without_tkinter():
     out = subprocess.run([sys.executable, "-c", code],
                          capture_output=True, text=True, cwd=str(ROOT))
     assert "HEADLESS_OK" in out.stdout, f"stdout={out.stdout!r}\nstderr={out.stderr!r}"
+
+
+def test_run_coordinator_imports_without_tkinter():
+    # M3.4: SuiteRunner + the suite orchestration live in core and must import
+    # headlessly (mouse/keyboard via the injected port; PIL/pandas/events guarded).
+    code = (
+        "import sys\n"
+        "import core.services.run_coordinator as rc\n"
+        "assert rc.SuiteRunner is not None\n"
+        "assert rc.generate_points is not None\n"
+        "leaked = [m for m in sys.modules if m == 'tkinter' or m.startswith('tkinter.')]\n"
+        "assert not leaked, leaked\n"
+        "assert 'pyautogui' not in sys.modules, 'pyautogui must stay lazy'\n"
+        "print('HEADLESS_OK')\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code],
+                         capture_output=True, text=True, cwd=str(ROOT))
+    assert "HEADLESS_OK" in out.stdout, f"stdout={out.stdout!r}\nstderr={out.stderr!r}"
