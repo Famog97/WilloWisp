@@ -923,7 +923,7 @@ from core.domain.scenario import Scenario
 from core.services.evidence_collector import FailureEvidenceCollector
 
 class SuiteRunner(threading.Thread):
-    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None, input_control=None):
+    def __init__(self, scenarios, monitors, protocols, config, on_scenario_start, on_progress, on_paused, on_pass_done, on_suite_done, on_log, suite_title="", rerun_failed_count=0, on_rec_start=None, on_rec_stop=None, on_rec_update=None, event_bus=None, input_control=None, on_proto_status=None):
         super().__init__(daemon=True)
         self.scenarios, self.monitors, self.protocols = scenarios, monitors, protocols
         self.rerun_failed_count = rerun_failed_count  # -1 = till pass, 0 = disabled, N = N times
@@ -950,6 +950,10 @@ class SuiteRunner(threading.Thread):
             from adapters.driven.input.pyautogui_input import PyAutoGuiInput
             input_control = PyAutoGuiInput()
         self._input = input_control
+        # M3.4: protocol-wait status goes through an injected callback instead of
+        # reaching into __main__.app.hud — keeps SuiteRunner free of the live UI.
+        # Signature: on_proto_status(state: "waiting"|"online", done, total, msg).
+        self._on_proto_status = on_proto_status
 
     def _emit(self, event):
         """Publish a lifecycle event if a bus + event class are present. Never
@@ -1236,17 +1240,15 @@ class SuiteRunner(threading.Thread):
 
             if not handler.check_health():
                 self.on_log(f"ISCS Engine waiting: Protocol '{proto_type}' starting/offline...")
-                import __main__
-                if hasattr(__main__, 'app') and getattr(__main__.app, 'hud', None) and __main__.app.hud.winfo_exists():
-                    __main__.app.hud.update_waiting(0, len(sc.iscs_points), "protocol offline")
+                if self._on_proto_status:
+                    self._on_proto_status("waiting", 0, len(sc.iscs_points), "protocol offline")
                 while not handler.check_health():
                     if self._stop_event.is_set(): break
                     self._sleep(0.5)
                 if not self._stop_event.is_set():
                     self.on_log(f"Protocol '{proto_type}' is now online! Resuming...")
-                    import __main__
-                    if hasattr(__main__, 'app') and getattr(__main__.app, 'hud', None) and __main__.app.hud.winfo_exists():
-                        __main__.app.after(0, lambda: __main__.app.hud.update_running(0, len(sc.iscs_points), f"{proto_type} Connected!"))
+                    if self._on_proto_status:
+                        self._on_proto_status("online", 0, len(sc.iscs_points), f"{proto_type} Connected!")
 
             # ── PROCEDURE ENGINE ─────────────────────────────────────────────
             # Delegates per-point execution to ProcedureRunner when available.
@@ -3135,6 +3137,19 @@ class SuitePanel(tk.Frame):
             if rec is not None:
                 rec.update_point(point_id, equip_desc, attr_desc)
 
+        # M3.4: HUD protocol-wait updates via callback (was a __main__.app.hud poke
+        # inside SuiteRunner). Preserves the original marshalling: waiting → direct,
+        # online → app.after(0, …).
+        _app = self.app
+        def _cb_proto_status(state, done, total, msg):
+            hud = getattr(_app, "hud", None)
+            if hud is None or not hud.winfo_exists():
+                return
+            if state == "waiting":
+                hud.update_waiting(done, total, msg)
+            else:  # "online"
+                _app.after(0, lambda: hud.update_running(done, total, msg))
+
         self.suite_runner = SuiteRunner(
             self.scenarios, self.app.monitors, self.app.protocols, APP_CONFIG,
             self._cb_start, self._cb_prog, self._cb_pause, lambda p, tp, path: None,
@@ -3143,6 +3158,7 @@ class SuitePanel(tk.Frame):
             on_rec_start=_rec_start,
             on_rec_stop=_rec_stop,
             on_rec_update=_rec_update,
+            on_proto_status=_cb_proto_status,
         )
         self.suite_runner.start()
         self.app.click_engine = self.suite_runner
