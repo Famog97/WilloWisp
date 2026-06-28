@@ -4693,6 +4693,7 @@ class Toast(tk.Toplevel):
 
 # ── Main Application ──────────────────────────────────────────────────────────
 # M5: Tk driving-adapter dispatcher + views, extracted from this file one at a time.
+from adapters.driving.ui_tkinter.composition import build_tk_core_api
 from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
 from adapters.driving.ui_tkinter.views.log_sink import LogSink
 from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
@@ -4756,6 +4757,13 @@ class App(tk.Tk):
         self.protocols = ProtocolManager(APP_CONFIG)
         self.iscs_excel_points = []
         self._profile_update_listeners = []   # callbacks notified when a new IO list is registered
+
+        # M5: the Tk app runs on the Core API facade, wired to its OWN registry +
+        # live config provider (no duplicate). Views forward intents through this.
+        self.core_api = build_tk_core_api(
+            self, registry=CORE_REGISTRY, config_provider=_config_provider,
+            protocols=self.protocols, monitors=self.monitors,
+        )
 
         def _tk_error_handler(exc, val, tb):
             logger.error("Tkinter Callback Exception!")

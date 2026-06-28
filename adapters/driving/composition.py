@@ -33,6 +33,8 @@ def build_core_api(
     *,
     config_path: Optional[Path] = None,
     base_dir: Optional[Path] = None,
+    registry: Any = None,
+    config_provider: Any = None,
     protocols: Any = None,
     input_control: Any = None,
     assets: Any = None,
@@ -43,17 +45,21 @@ def build_core_api(
 ) -> WilloWispCoreAPI:
     """Assemble the WilloWispCoreAPI for any front-end.
 
-    Inject `event_dispatcher` (defaults to a synchronous one) and, to stay fully fake
-    (no hardware / no OS-automation import), `protocols` / `input_control` / `assets`.
+    Inject `registry` / `config_provider` to REUSE an existing core (e.g. the Tk app's
+    already-discovered registry and live config — avoids a duplicate). Inject
+    `event_dispatcher` (defaults to a synchronous one) and, to stay fully fake (no
+    hardware / no OS-automation import), `protocols` / `input_control` / `assets`.
     """
     base = Path(base_dir) if base_dir else _ROOT
     set_base_dir(base)
 
-    registry = CapabilityRegistry()
-    for cat in _PLUGIN_CATEGORIES:
-        discover_directory(_ROOT / "plugins" / cat, into=registry)
+    if registry is None:
+        registry = CapabilityRegistry()
+        for cat in _PLUGIN_CATEGORIES:
+            discover_directory(_ROOT / "plugins" / cat, into=registry)
 
-    config = ConfigProvider(config_path or (base / "config.json"))
+    config = config_provider if config_provider is not None else \
+        ConfigProvider(config_path or (base / "config.json"))
     bus = EventBus()
 
     if input_control is None:
