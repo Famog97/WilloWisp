@@ -3193,6 +3193,9 @@ class OverlayWindow(tk.Toplevel):
 
     def __init__(self, master, app_mode, zones, monitor: Monitor, grid_spacing: int, on_done, pages: list = None, zones_per_page: dict = None):
         super().__init__(master)
+        # R-HEX-3: canvas<->absolute coordinate maths lives in a pure CanvasViewport,
+        # fed the live window origin.
+        self._viewport = CanvasViewport(lambda: (self.winfo_rootx(), self.winfo_rooty()))
         self.app_mode = app_mode
         self.zones = zones
         self.monitor = monitor
@@ -3426,8 +3429,8 @@ class OverlayWindow(tk.Toplevel):
         self.bind("<Delete>",    lambda e: self._delete_last())
         self.bind("<BackSpace>", lambda e: self._delete_last())
 
-    def _canvas_to_abs(self, cx, cy): return cx + self.winfo_rootx(), cy + self.winfo_rooty()
-    def _abs_to_canvas(self, ax, ay): return ax - self.winfo_rootx(), ay - self.winfo_rooty()
+    def _canvas_to_abs(self, cx, cy): return self._viewport.to_abs(cx, cy)
+    def _abs_to_canvas(self, ax, ay): return self._viewport.to_canvas(ax, ay)
 
     def _hit_zone(self, cx, cy):
         eh = self.EDGE_HIT
@@ -4672,6 +4675,7 @@ from adapters.driving.ui_tkinter.views.stats_view import StatsView
 from adapters.driving.ui_tkinter.views.settings_view import SettingsView
 from adapters.driving.ui_tkinter.views.run_controls import RunControls
 from adapters.driving.ui_tkinter.views.mode_view import ModeView
+from adapters.driving.ui_tkinter.components.canvas_viewport import CanvasViewport
 from core.services.workspace import WorkspaceSession
 
 
