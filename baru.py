@@ -2450,7 +2450,7 @@ class SuitePanel(tk.Frame):
             return
 
         self.app.set_execution_state("running")
-        self.app.lbl_state.config(text="RUNNING FLOW", fg="#2979FF")
+        self.app.stats.set("state", "RUNNING FLOW", "#2979FF")
         self.app.run_progress.set_fraction(0)
 
         # Mock standard execution engine interfaces for Space/Esc hooks
@@ -2509,7 +2509,7 @@ class SuitePanel(tk.Frame):
                 self.app.after(0, lambda: self.app._log(f"[Flow] Standalone run crashed: {ex}"))
             finally:
                 self.app.after(0, lambda: self.app.set_execution_state("idle"))
-                self.app.after(0, lambda: self.app.lbl_state.config(text="IDLE", fg="#444"))
+                self.app.stats.set("state", "IDLE", "#444")
                 self.app.run_progress.set_text("Ready.")
 
         threading.Thread(target=worker, daemon=True).start()
@@ -4696,6 +4696,7 @@ class Toast(tk.Toplevel):
 from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
 from adapters.driving.ui_tkinter.views.log_sink import LogSink
 from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
+from adapters.driving.ui_tkinter.views.stats_view import StatsView
 from core.services.workspace import WorkspaceSession
 
 
@@ -4965,25 +4966,12 @@ class App(tk.Tk):
         self._tb_compact = False
         self.after(0, lambda: self.bind("<Configure>", self._on_resize))
 
-        stats = tk.Frame(self, bg="#0f0f0f")
-        stats.pack(fill="x", padx=20)
-        
-        def _stat_maker(parent, title, value, color="#666"):
-            f = tk.Frame(parent, bg="#161616", padx=12, pady=8)
-            f.pack(side="left", padx=(0, 6), pady=4)
-            lbl_title = tk.Label(f, text=title, bg="#161616", fg="#aaaaaa", font=("Consolas", 8))
-            lbl_title.pack()
-            lbl_val = tk.Label(f, text=value, bg="#161616", fg=color, font=("Consolas", 13, "bold"))
-            lbl_val.pack()
-            return lbl_title, lbl_val
-
-        _, self.lbl_zones = _stat_maker(stats, "ZONES", "0")
-        self.lbl_title_include, self.lbl_include = _stat_maker(stats, "TARGETS", "0", TARGET_COLOR)
-        self.lbl_title_exclude, self.lbl_exclude = _stat_maker(stats, "-", "0", "#444")
-        _, self.lbl_points  = _stat_maker(stats, "CLICK PTS", "0", POINT_COLOR)
-        _, self.lbl_spacing = _stat_maker(stats, "SPACING", f"{GRID_SPACING}px")
-        _, self.lbl_state   = _stat_maker(stats, "STATE", "IDLE", "#444")
-        _, self.lbl_monitor = _stat_maker(stats, "SCREEN", f"Display {self.active_mon.display_num}", "#2979FF")
+        # M5: the stats strip is the StatsView (owns all stat labels).
+        self.stats = StatsView(
+            self, self._dispatcher,
+            monitor_text=f"Display {self.active_mon.display_num}",
+            spacing_text=f"{GRID_SPACING}px",
+        ).pack(fill="x", padx=20)
 
         self._paned = tk.PanedWindow(self, orient="horizontal", bg="#0f0f0f", sashwidth=5, sashrelief="flat", sashpad=2, handlesize=0)
         self._paned.pack(fill="both", expand=True, padx=0, pady=0)
@@ -5255,7 +5243,7 @@ class App(tk.Tk):
         prev = self.active_mon
         self.active_mon = monitor
         mon_color = SCREEN_COLORS[self.monitors.index(monitor) % len(SCREEN_COLORS)]
-        self.lbl_monitor.config(text=f"Display {monitor.display_num}", fg=mon_color)
+        self.stats.set("monitor", f"Display {monitor.display_num}", mon_color)
         self._close_preview()
         if self.zones and prev is not monitor:
             # Clear canvas zones only — zones_per_page (saved zones) preserved
@@ -5310,14 +5298,14 @@ class App(tk.Tk):
         
         mode = self.run_mode.get()
         if mode == "grid":
-            self.lbl_title_include.config(text="INCLUDE")
-            self.lbl_title_exclude.config(text="EXCLUDE")
+            self.stats.set("include_title", "INCLUDE")
+            self.stats.set("exclude_title", "EXCLUDE")
         elif mode == "sequence":
-            self.lbl_title_include.config(text="TARGETS")
-            self.lbl_title_exclude.config(text="-")
+            self.stats.set("include_title", "TARGETS")
+            self.stats.set("exclude_title", "-")
         elif mode == "iscs":
-            self.lbl_title_include.config(text="PANELS")
-            self.lbl_title_exclude.config(text="POINTS")
+            self.stats.set("include_title", "PANELS")
+            self.stats.set("exclude_title", "POINTS")
             
         self._refresh()
 
@@ -5399,24 +5387,24 @@ class App(tk.Tk):
             self._open_preview()
 
     def _update_stats(self):
-        self.lbl_zones.config(text=str(len(self.zones)))
-        self.lbl_points.config(text=str(len(self.valid_points)))
-        self.lbl_spacing.config(text=f"{self.grid_spacing}px")
+        self.stats.set("zones", str(len(self.zones)))
+        self.stats.set("points", str(len(self.valid_points)))
+        self.stats.set("spacing", f"{self.grid_spacing}px")
         
         if self.run_mode.get() == "grid":
             inc = sum(1 for z in self.zones if z.zone_type == "include")
             exc = sum(1 for z in self.zones if z.zone_type == "exclude")
-            self.lbl_include.config(text=str(inc), fg=INCLUDE_COLOR)
-            self.lbl_exclude.config(text=str(exc), fg=EXCLUDE_COLOR)
+            self.stats.set("include", str(inc), INCLUDE_COLOR)
+            self.stats.set("exclude", str(exc), EXCLUDE_COLOR)
         elif self.run_mode.get() == "sequence":
             tgt = sum(1 for z in self.zones if z.zone_type == "target")
-            self.lbl_include.config(text=str(tgt), fg=TARGET_COLOR)
-            self.lbl_exclude.config(text="-", fg="#444")
+            self.stats.set("include", str(tgt), TARGET_COLOR)
+            self.stats.set("exclude", "-", "#444")
         elif self.run_mode.get() == "iscs":
             panels = sum(1 for z in self.zones if z.zone_type == "alarm_panel")
             pts = len(self.iscs_excel_points) if hasattr(self, 'iscs_excel_points') else 0
-            self.lbl_include.config(text=str(panels), fg=ALARM_PANEL_COLOR)
-            self.lbl_exclude.config(text=str(pts), fg="#00C853")
+            self.stats.set("include", str(panels), ALARM_PANEL_COLOR)
+            self.stats.set("exclude", str(pts), "#00C853")
 
     def _capture_monitor_thumbnail(self, monitor) -> "ImageTk.PhotoImage | None":
         if not PIL_AVAILABLE: return None
@@ -5697,14 +5685,14 @@ class App(tk.Tk):
         elif state == "paused":
             self.btn_pause.config(text="▶ Resume  [Space]", bg=INCLUDE_COLOR, fg="#000")
             self.btn_pause_c.config(text="▶", bg=INCLUDE_COLOR, fg="#000")
-            self.lbl_state.config(text="PAUSED", fg=PAUSE_COLOR)
+            self.stats.set("state", "PAUSED", PAUSE_COLOR)
 
         elif state == "stopping":
             self.btn_pause.config(state="disabled")
             self.btn_pause_c.config(state="disabled")
             self.btn_stop.config(state="disabled")
             self.btn_stop_c.config(state="disabled")
-            self.lbl_state.config(text="STOPPING…", fg=EXCLUDE_COLOR)
+            self.stats.set("state", "STOPPING…", EXCLUDE_COLOR)
 
     # ── Test Execution ────────────────────────────────────────────────────────
     def _run_test(self):
@@ -5729,7 +5717,7 @@ class App(tk.Tk):
             self._close_preview()
             self.set_execution_state("running")
             self.run_progress.set_fraction(0)
-            self.lbl_state.config(text="RUNNING", fg=ALARM_PANEL_COLOR)
+            self.stats.set("state", "RUNNING", ALARM_PANEL_COLOR)
 
             self.hud = HudOverlay(self, len(self.iscs_excel_points), self.active_mon)
             self._log(f"ISCS Test Started: {len(self.iscs_excel_points)} targets.")
@@ -5748,7 +5736,7 @@ class App(tk.Tk):
         self._close_preview()
         self.set_execution_state("running") 
         self.run_progress.set_fraction(0)
-        self.lbl_state.config(text="RUNNING", fg=INCLUDE_COLOR)
+        self.stats.set("state", "RUNNING", INCLUDE_COLOR)
 
         self.hud = HudOverlay(self, len(self.valid_points), self.active_mon)
         self._log(f"Test Started: {self.run_mode.get().upper()} MODE — {len(self.valid_points)} targets.")
@@ -5765,7 +5753,7 @@ class App(tk.Tk):
             logger.info("User requested RESUME.")
             self.click_engine.resume()
             self.set_execution_state("running") 
-            self.lbl_state.config(text="RUNNING", fg=INCLUDE_COLOR)
+            self.stats.set("state", "RUNNING", INCLUDE_COLOR)
             self._log("Resumed.")
         else:
             logger.info("User requested PAUSE.")
@@ -5821,7 +5809,7 @@ class App(tk.Tk):
         self.set_execution_state("idle") 
 
         if not was_stopped: self.run_progress.set_fraction(100)
-        self.lbl_state.config(text="STOPPED" if was_stopped else "DONE", fg=EXCLUDE_COLOR if was_stopped else INCLUDE_COLOR)
+        self.stats.set("state", "STOPPED" if was_stopped else "DONE", EXCLUDE_COLOR if was_stopped else INCLUDE_COLOR)
         
         results_len = len(self.click_engine.results) if hasattr(self.click_engine, 'results') else 0
         end_str = f"{'Stopped' if was_stopped else 'Complete'} — {results_len} items."
