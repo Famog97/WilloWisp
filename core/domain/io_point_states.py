@@ -76,3 +76,16 @@ def apply_value(cur_reg: int, value: int, bit_offset: int, width: int) -> int:
     word, leaving the other bits untouched. (width=1 reduces to set/clear one bit.)"""
     mask = ((1 << width) - 1) << bit_offset
     return ((cur_reg & ~mask) | ((value << bit_offset) & mask)) & 0xFFFF
+
+
+def write_register(payload: dict) -> int:
+    """The register ISCS actually reads/writes.
+
+    Prefer ``iscs_modbus_address`` when the IO list provides it (that is where ISCS
+    reads the point); otherwise fall back to ``reg`` (the source-system register, which
+    for TWP/AMS-style lists already IS the ISCS address).
+    """
+    iscs = payload.get("iscs_modbus_address")
+    if iscs:
+        return int(iscs)
+    return int(payload.get("reg", 0) or 0)

@@ -333,6 +333,9 @@ ISCS_ALIASES = {
                         "register address/file", "reg_addr", "address", "register", "reg"],
     "bit":             ["bit_offset", "bit offset", "bit", "offset"],
     "addr_size":       ["dc_addr_size", "dc addr size", "addr_size", "size"],
+    # The address ISCS itself reads/writes (vs the source-system register, which we ignore).
+    "iscs_modbus_address": ["iscs_modbus_address", "iscs modbus address", "iscs_addr",
+                            "iscs address", "iscs_modbus_addr"],
     "dc_io_type":      ["dc_io_type", "dc io type"],
     # SNMP (Future)
     "oid":             ["oid", "snmp_oid"],
@@ -5090,7 +5093,7 @@ class App(tk.Tk):
                     s = str(val).strip().lower()
                     m = re.search(r'(\d+)', s)
                     val = int(m.group(1)) if m else 3
-                elif col_key in ["reg", "bit", "device_address", "addr_size"]:
+                elif col_key in ["reg", "bit", "device_address", "addr_size", "iscs_modbus_address"]:
                     try: val = int(val)
                     except: val = 0
                 if col_key not in ["point_id", "severity"]:   # protocol now included in payload

@@ -5,7 +5,7 @@ Each `states` dict mirrors what the parser extracts from the vN columns:
   {value: {"label", "severity", "state"}}.
 """
 from core.domain.io_point_states import (
-    baseline_value, trigger_values, field_width, apply_value,
+    baseline_value, trigger_values, field_width, apply_value, write_register,
 )
 
 
@@ -55,6 +55,15 @@ def test_apply_value_single_bit_matches_old_set_clear():
     assert apply_value(0b0000, 1, bit_offset=0, width=1) == 0b0001
     assert apply_value(0b1111, 0, bit_offset=0, width=1) == 0b1110
     assert apply_value(0b0000, 1, bit_offset=11, width=1) == (1 << 11)
+
+
+def test_write_register_prefers_iscs_address():
+    # ES: source register 40010 is ignored; ISCS reads its own address 40000.
+    assert write_register({"reg": 40010, "iscs_modbus_address": 40000}) == 40000
+    # TWP/AMS: no ISCS address column -> the parsed reg already IS the ISCS address.
+    assert write_register({"reg": 40001}) == 40001
+    assert write_register({"reg": 30}) == 30
+    assert write_register({"reg": 0}) == 0
 
 
 def test_apply_value_multibit_writes_whole_field():
