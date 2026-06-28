@@ -2451,7 +2451,7 @@ class SuitePanel(tk.Frame):
 
         self.app.set_execution_state("running")
         self.app.lbl_state.config(text="RUNNING FLOW", fg="#2979FF")
-        self.app.progress_var.set(0)
+        self.app.run_progress.set_fraction(0)
 
         # Mock standard execution engine interfaces for Space/Esc hooks
         class MockEngine:
@@ -2500,8 +2500,8 @@ class SuitePanel(tk.Frame):
 
                 def update_progress(step_name, done, total):
                     pct = (done / total) * 100
-                    self.app.after(0, lambda: self.app.progress_var.set(pct))
-                    self.app.after(0, lambda: self.app.lbl_progress.config(text=f"[Flow] Executing: {step_name} ({done}/{total})"))
+                    self.app.run_progress.set_fraction(pct)
+                    self.app.run_progress.set_text(f"[Flow] Executing: {step_name} ({done}/{total})")
 
                 runner.run_standalone(sc, sc_dir, on_progress=update_progress)
                 self.app.after(0, lambda: self.app._log(f"[Flow] Standalone run complete."))
@@ -2510,7 +2510,7 @@ class SuitePanel(tk.Frame):
             finally:
                 self.app.after(0, lambda: self.app.set_execution_state("idle"))
                 self.app.after(0, lambda: self.app.lbl_state.config(text="IDLE", fg="#444"))
-                self.app.after(0, lambda: self.app.lbl_progress.config(text="Ready."))
+                self.app.run_progress.set_text("Ready.")
 
         threading.Thread(target=worker, daemon=True).start()
         
@@ -4695,6 +4695,7 @@ class Toast(tk.Toplevel):
 # M5: Tk driving-adapter dispatcher + views, extracted from this file one at a time.
 from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
 from adapters.driving.ui_tkinter.views.log_sink import LogSink
+from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
 from core.services.workspace import WorkspaceSession
 
 
@@ -4998,13 +4999,8 @@ class App(tk.Tk):
 
         pf2 = tk.Frame(left_pane, bg="#0f0f0f")
         pf2.pack(fill="x", padx=20, pady=(0, 2))
-        self.progress_var = tk.DoubleVar()
-        style = ttk.Style(self)
-        style.theme_use("default")
-        style.configure("G.Horizontal.TProgressbar", troughcolor="#1a1a1a", background=INCLUDE_COLOR, bordercolor="#0f0f0f")
-        ttk.Progressbar(pf2, variable=self.progress_var, maximum=100, style="G.Horizontal.TProgressbar").pack(fill="x")
-        self.lbl_progress = tk.Label(pf2, text="Ready.", bg="#0f0f0f", fg="#aaaaaa", font=("Consolas", 9), anchor="w")
-        self.lbl_progress.pack(fill="x")
+        # M5: progress bar + status label extracted to the RunProgressView.
+        self.run_progress = RunProgressView(pf2, self._dispatcher).pack(fill="x")
 
         lf = tk.Frame(left_pane, bg="#0f0f0f")
         lf.pack(fill="x", padx=20, pady=(0, 14))
@@ -5732,7 +5728,7 @@ class App(tk.Tk):
                 
             self._close_preview()
             self.set_execution_state("running")
-            self.progress_var.set(0)
+            self.run_progress.set_fraction(0)
             self.lbl_state.config(text="RUNNING", fg=ALARM_PANEL_COLOR)
 
             self.hud = HudOverlay(self, len(self.iscs_excel_points), self.active_mon)
@@ -5751,7 +5747,7 @@ class App(tk.Tk):
 
         self._close_preview()
         self.set_execution_state("running") 
-        self.progress_var.set(0)
+        self.run_progress.set_fraction(0)
         self.lbl_state.config(text="RUNNING", fg=INCLUDE_COLOR)
 
         self.hud = HudOverlay(self, len(self.valid_points), self.active_mon)
@@ -5789,14 +5785,14 @@ class App(tk.Tk):
 
     def _cb_progress(self, done, total, val1, val2):
         pct = done / total * 100
-        self.after(0, lambda: self.progress_var.set(pct))
+        self.run_progress.set_fraction(pct)
         
         if self.run_mode.get() == "iscs":
             msg = f"Testing {done}/{total}  →  {val1} ({val2})"
         else:
             msg = f"Clicking {done}/{total}  →  ({val1}, {val2})"
             
-        self.after(0, lambda: self.lbl_progress.config(text=msg))
+        self.run_progress.set_text(msg)
         
         if self.hud and self.hud.winfo_exists():
             if self.run_mode.get() == "iscs":
@@ -5824,12 +5820,12 @@ class App(tk.Tk):
         
         self.set_execution_state("idle") 
 
-        if not was_stopped: self.progress_var.set(100)
+        if not was_stopped: self.run_progress.set_fraction(100)
         self.lbl_state.config(text="STOPPED" if was_stopped else "DONE", fg=EXCLUDE_COLOR if was_stopped else INCLUDE_COLOR)
         
         results_len = len(self.click_engine.results) if hasattr(self.click_engine, 'results') else 0
         end_str = f"{'Stopped' if was_stopped else 'Complete'} — {results_len} items."
-        self.lbl_progress.config(text=end_str)
+        self.run_progress.set_text(end_str)
         self._log(f"{'Stopped' if was_stopped else 'Done'} → {session_dir}")
 
     def _open_ocr_monitor(self):
