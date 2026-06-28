@@ -22,6 +22,13 @@
 then — only once every box in a migration phase is `[x]` — tick that phase in
 [`RESTRUCTURE_MIGRATION.md`](RESTRUCTURE_MIGRATION.md).
 
+> **Phase note — M4 (CLI adapter, ✅ in MIGRATION.md):** M4 adds *new* driving-side code
+> (`adapters/driving/cli/composition.py` `build_core_api`, the `python -m adapters.driving.cli`
+> commands, `core/services/run_coordinator.SuiteRunService` — the facade's `run_service`) plus
+> the B9/B10 proof tests. It **relocates no legacy function**, so it has no per-method rows here.
+> The run-path relocations it builds on (engine M3.1, SuiteRunner M3.4) are recorded in §1.6 / §2.3.
+> Moving `baru`'s own composition (`_load_plugins`, line 35) into core stays a deferred M5/M6 item.
+
 > **Status (2026-06-26): all boxes unticked — correct.** **M0 is complete** but moved **no
 > code** (it is the safety net: characterization goldens, CI guards, empty skeleton, the B2
 > baseline). Per-function relocation — and therefore the first ticks below — **begins at M1**
