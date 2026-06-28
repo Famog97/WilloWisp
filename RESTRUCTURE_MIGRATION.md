@@ -172,8 +172,8 @@ and the four drop-in extensibility tests pass. The UI is now provably swappable.
 | Status | Step | Adapter Unit | Action / Legacy Extraction | Target Destination |
 |:--:|---|---|---|---|
 | [x] | M5.1 | Tk Event Dispatcher | Implement thread-marshalling dispatcher using `root.after`. *(`TkEventDispatcher`; + shared `adapters/driving/composition.py` and `ui_tkinter/composition.build_tk_core_api(root)` so the Tk app builds the same facade as the CLI with its own dispatcher. tkinter-free / unit-tested.)* | `adapters/driving/ui_tkinter/dispatcher.py` |
-| [ ] | M5.2 | App Shell & Layout | Extract window geometry, resizing, layouts, and views from legacy `baru.py`. | `adapters/driving/ui_tkinter/app_shell.py` · `adapters/driving/ui_tkinter/views/` |
-| [ ] | M5.3 | Intent Forwarders | Convert Run, Import, Settings, and Card Config controls into thin facade-forwarders. | `adapters/driving/ui_tkinter/views/` |
+| 🔄 | M5.2 | App Shell & Layout | Extract window geometry, resizing, layouts, and views from legacy `baru.py`. *(**Views out so far:** `LogSink` ✅, `RunProgressView` ✅, `StatsView` ✅ — Strangler, one at a time; `App` still instantiates them. AppShell itself pending.)* | `adapters/driving/ui_tkinter/app_shell.py` · `adapters/driving/ui_tkinter/views/` |
+| 🔄 | M5.3 | Intent Forwarders | Convert Run, Import, Settings, and Card Config controls into thin facade-forwarders. *(**`App` now holds `core_api`** (facade wired to live registry+config). `SettingsView` ✅ reads/writes via `api.get_config`/`update_config`. Import / Run / Card-Config pending.)* | `adapters/driving/ui_tkinter/views/` |
 | [ ] | M5.4 | Schema Form Renderer | Implement dynamic form generator from step parameters. Delete legacy hand-coded parameter forms. | `adapters/driving/ui_tkinter/renderer.py` |
 | [ ] | M5.5 | Overlay Coordinate Split | Split drawing canvas overlays from underlying geometry data (R-HEX-3). | `adapters/driving/ui_tkinter/components/` |
 | [ ] | M5.6 | Flow & Suite Panel View | Port the step-tree editor views and suite-list panels to drive the Core API. | `adapters/driving/ui_tkinter/views/` |
