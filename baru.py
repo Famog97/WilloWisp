@@ -4698,6 +4698,7 @@ from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
 from adapters.driving.ui_tkinter.views.log_sink import LogSink
 from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
 from adapters.driving.ui_tkinter.views.stats_view import StatsView
+from adapters.driving.ui_tkinter.views.settings_view import SettingsView
 from core.services.workspace import WorkspaceSession
 
 
@@ -5501,129 +5502,25 @@ class App(tk.Tk):
         _step(count, 1)
         
     def _settings_dialog(self):
-        if hasattr(self, '_settings_win') and self._settings_win and self._settings_win.winfo_exists():
-            self._shake_window(self._settings_win)
-            return
-            
-        dlg = tk.Toplevel(self)
-        self._settings_win = dlg
-        dlg.protocol("WM_DELETE_WINDOW", lambda: setattr(self, '_settings_win', None) or dlg.destroy())
-        dlg.title("⚙ Settings & Configuration")
-        
-        w, h = 640, 690  # Expanded height to fit the new timeout row
-        x = self.winfo_x() + (self.winfo_width() // 2) - (w // 2)
-        y = self.winfo_y() + (self.winfo_height() // 2) - (h // 2)
-        dlg.geometry(f"{w}x{h}+{x}+{y}")
-        
-        dlg.configure(bg="#0f0f0f"); dlg.resizable(False, False)
-        dlg.attributes("-topmost", True)
+        # M5: the Settings dialog is a SettingsView that reads/writes config via the
+        # Core API. The App only supplies the side effects the view must not own.
+        if getattr(self, "_settings_view", None) is None:
+            self._settings_view = SettingsView(
+                self, self.core_api, on_applied=self._on_settings_applied,
+                shake=self._shake_window)
+        self._settings_view.show()
 
-        # Action bar pinned to the BOTTOM first, so Apply/Cancel stay visible
-        # no matter how many settings groups are shown above.
-        btn_frame = tk.Frame(dlg, bg="#0f0f0f")
-        btn_frame.pack(side="bottom", fill="x", padx=20, pady=(6, 14))
-
-        # Scrollable, collapsible settings area above the action bar.
-        _content = tk.Frame(dlg, bg="#0f0f0f")
-        _content.pack(side="top", fill="both", expand=True)
-        _canvas = tk.Canvas(_content, bg="#0f0f0f", highlightthickness=0)
-        _vsb = tk.Scrollbar(_content, orient="vertical", command=_canvas.yview)
-        _canvas.configure(yscrollcommand=_vsb.set)
-        _vsb.pack(side="right", fill="y")
-        _canvas.pack(side="left", fill="both", expand=True, padx=(20, 4), pady=(16, 6))
-        input_frame = tk.Frame(_canvas, bg="#0f0f0f")
-        _win = _canvas.create_window((0, 0), window=input_frame, anchor="nw")
-        input_frame.bind("<Configure>", lambda e: _canvas.configure(scrollregion=_canvas.bbox("all")))
-        _canvas.bind("<Configure>", lambda e: _canvas.itemconfigure(_win, width=e.width))
-        _canvas.bind_all("<MouseWheel>", lambda e: _canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
-        dlg.bind("<Destroy>", lambda e: (_canvas.unbind_all("<MouseWheel>") if e.widget is dlg else None))
-        ls = dict(bg="#0f0f0f", fg="#aaa", font=("Consolas", 10))
-        es = dict(bg="#1a1a1a", fg="#fff", insertbackground="#fff", font=("Consolas", 11), relief="flat", bd=6)
-
-        v_spacing = tk.StringVar(value=str(self.grid_spacing))
-        v_delay   = tk.StringVar(value=str(APP_CONFIG.get("click_delay", 1.5)))
-        v_drift   = tk.StringVar(value=str(APP_CONFIG.get("mouse_drift_px", 15)))
-        v_port    = tk.StringVar(value=str(APP_CONFIG.get("modbus_port", 502)))
-        v_nav_wait= tk.StringVar(value=str(APP_CONFIG.get("nav_wait_sec", 1.0)))
-        v_detect_dur = tk.StringVar(value=str(APP_CONFIG.get("detection_duration_sec", 8.0)))
-        v_sync_limit = tk.StringVar(value=str(APP_CONFIG.get("datetime_sync_limit_sec", 4.0)))
-        v_sampler_int = tk.StringVar(value=str(APP_CONFIG.get("sampler_interval_ms",  100)))
-        v_tesseract = tk.StringVar(value=APP_CONFIG.get("tesseract_cmd", ""))
-        v_lang    = tk.StringVar(value=APP_CONFIG.get("tesseract_lang", "eng"))
-
-        def _add_section(title, fields, expanded=True):
-            st = {"open": expanded}
-            head = tk.Frame(input_frame, bg="#161616", cursor="hand2")
-            head.pack(fill="x", pady=(8, 0))
-            arrow = tk.Label(head, text=("▾" if expanded else "▸"), bg="#161616",
-                             fg="#2979FF", font=("Consolas", 11, "bold"))
-            arrow.pack(side="left", padx=(8, 6), pady=6)
-            ttl = tk.Label(head, text=title, bg="#161616", fg="#ddd",
-                           font=("Consolas", 10, "bold"))
-            ttl.pack(side="left", pady=6)
-            sect = tk.Frame(input_frame, bg="#0f0f0f")
-            for r, (lbl, var, desc, width) in enumerate(fields):
-                tk.Label(sect, text=lbl, **ls).grid(row=r*2, column=0, sticky="w", pady=(8, 0))
-                tk.Entry(sect, textvariable=var, width=width, **es).grid(row=r*2, column=1, padx=10, pady=(8, 0), sticky="w")
-                tk.Label(sect, text=desc, bg="#0f0f0f", fg="#555", font=("Consolas", 8)).grid(row=r*2+1, column=0, columnspan=2, sticky="w", pady=(0, 4))
-            if expanded:
-                sect.pack(fill="x", padx=(6, 0), pady=(0, 4))
-            def _toggle(_e=None):
-                st["open"] = not st["open"]
-                if st["open"]:
-                    sect.pack(fill="x", padx=(6, 0), pady=(0, 4)); arrow.config(text="▾")
-                else:
-                    sect.pack_forget(); arrow.config(text="▸")
-            for _w in (head, arrow, ttl):
-                _w.bind("<Button-1>", _toggle)
-
-        _add_section("⚙  General & Protocol", [
-            ("Click Delay (sec):",  v_delay, "Wait time before taking screenshot.", 6),
-            ("Modbus Port:",        v_port,  "TCP Port for the ISCS Server (requires restart).", 6),
-        ])
-        _add_section("🧪  Suite Runner & Verification", [
-            ("Nav Wait (sec):",          v_nav_wait,    "Wait time between navigation clicks (Suite Runner).", 6),
-            ("Detection Duration (s):",  v_detect_dur,  "Observation window for concurrent text polling and blink detection.", 6),
-            ("Datetime Sync Limit (s):", v_sync_limit,  "Max allowed gap between SCADA on-screen time and trigger time before datetime FAILs.", 6),
-            ("Sampler Interval (ms):",   v_sampler_int, "Milliseconds between each frame grab — lower = more frames.", 6),
-        ])
-        _add_section("🔤  OCR / Tesseract", [
-            ("Tesseract Path:",  v_tesseract, "Path to tesseract.exe for OCR verification.", 30),
-            ("Tesseract Model:", v_lang,      "Model name (e.g. 'eng' or 'custom_model').", 15),
-        ])
-        _add_section("🖱  RPA / Fuzzer (advanced)", [
-            ("Grid Spacing (px):", v_spacing, "Distance between grid points. (Fuzzer/RPA ONLY)", 6),
-            ("Mouse Drift (px):",  v_drift,   "Safety radius. Pauses if bumped.", 6),
-        ], expanded=False)
-        
-        # (settings are rendered above as collapsible sections)
-
-        def apply():
-            global CLICK_DELAY, MOUSE_DRIFT_PX
-            try:
-                self.grid_spacing = int(v_spacing.get())
-                CLICK_DELAY = float(v_delay.get())
-                MOUSE_DRIFT_PX = int(v_drift.get())
-
-                APP_CONFIG["grid_spacing"]  = self.grid_spacing
-                APP_CONFIG["click_delay"]   = CLICK_DELAY
-                APP_CONFIG["mouse_drift_px"]= MOUSE_DRIFT_PX
-                APP_CONFIG["nav_wait_sec"]  = float(v_nav_wait.get())
-                APP_CONFIG["modbus_port"]   = int(v_port.get())
-                APP_CONFIG["detection_duration_sec"] = float(v_detect_dur.get())
-                APP_CONFIG["datetime_sync_limit_sec"] = float(v_sync_limit.get())
-                APP_CONFIG["sampler_interval_ms"]  = int(v_sampler_int.get())
-                APP_CONFIG["tesseract_cmd"] = v_tesseract.get()
-                APP_CONFIG["tesseract_lang"]= v_lang.get()
-
-                initialize_tesseract()
-                save_config()
-                if self.zones: self._refresh()
-                dlg.destroy()
-            except ValueError: messagebox.showerror("Invalid Input", "Please check your numbers.", parent=dlg)
-
-        tk.Button(btn_frame, text="✓ Apply & Save", bg="#2979FF", fg="#fff", font=("Consolas", 10, "bold"), relief="flat", pady=6, anchor="center", command=apply, cursor="hand2").pack(side="left", padx=5, expand=True, fill="x")
-        tk.Button(btn_frame, text="Cancel", bg="#222", fg="#aaa", font=("Consolas", 10), relief="flat", pady=6, anchor="center", command=lambda: (setattr(self, '_settings_win', None), dlg.destroy()), cursor="hand2").pack(side="left", padx=5, expand=True, fill="x")
+    def _on_settings_applied(self, cfg):
+        # Config is already written to APP_CONFIG + saved by the facade. Apply the
+        # non-config side effects: legacy globals (ISCS_Engine still reads these until
+        # M6.1), the grid-spacing attr, OCR re-init, and a canvas refresh.
+        global CLICK_DELAY, MOUSE_DRIFT_PX
+        self.grid_spacing = int(cfg.get("grid_spacing", self.grid_spacing))
+        CLICK_DELAY = float(cfg.get("click_delay", CLICK_DELAY))
+        MOUSE_DRIFT_PX = int(cfg.get("mouse_drift_px", MOUSE_DRIFT_PX))
+        initialize_tesseract()
+        if self.zones:
+            self._refresh()
 
     def _save_zones(self):
         path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("Zone config", "*.json")])
