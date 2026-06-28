@@ -4670,6 +4670,7 @@ from adapters.driving.ui_tkinter.views.log_sink import LogSink
 from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
 from adapters.driving.ui_tkinter.views.stats_view import StatsView
 from adapters.driving.ui_tkinter.views.settings_view import SettingsView
+from adapters.driving.ui_tkinter.views.run_controls import RunControls
 from core.services.workspace import WorkspaceSession
 
 
@@ -4922,26 +4923,14 @@ class App(tk.Tk):
         tk.Button(row1, text="💾 Save", bg="#222", fg="#ccc", command=self._save_zones, **sf).pack(side="left", padx=3)
         tk.Button(row1, text="📂 Load", bg="#222", fg="#ccc", command=self._load_zones, **sf).pack(side="left", padx=3)
         
+        # M5: Run/Pause/Stop button cluster extracted to the RunControls view.
         self._tb_row2_full = tk.Frame(tb, bg="#161616")
         self._tb_row2_full.pack(fill="x", pady=(2, 2))
-        self.btn_run = tk.Button(self._tb_row2_full, text="▶ Run  [Ctrl+5]", bg=INCLUDE_COLOR, fg="#000", command=self._run_test, **sf, state="disabled")
-        self.btn_run.pack(side="left", padx=3)
-        self.btn_pause = tk.Button(self._tb_row2_full, text="⏸ Pause  [Space]", bg=PAUSE_COLOR, fg="#000", command=self._toggle_pause, **sf, state="disabled")
-        self.btn_pause.pack(side="left", padx=3)
-        self.btn_stop = tk.Button(self._tb_row2_full, text="■ Stop  [Esc]", bg=EXCLUDE_COLOR, fg="#fff", command=self._stop_test, **sf, state="disabled")
-        self.btn_stop.pack(side="left", padx=3)
-
         self._tb_row2_compact = tk.Frame(tb, bg="#161616")
-        ic = dict(font=("Consolas", 13, "bold"), relief="flat", padx=9, pady=5, cursor="hand2", width=2)
-        self.btn_run_c = tk.Button(self._tb_row2_compact, text="▶", bg=INCLUDE_COLOR, fg="#000", command=self._run_test, **ic, state="disabled")
-        self.btn_run_c.pack(side="left", padx=2)
-        Tooltip(self.btn_run_c, "▶ Run Test  [Ctrl+5]")
-        self.btn_pause_c = tk.Button(self._tb_row2_compact, text="⏸", bg=PAUSE_COLOR, fg="#000", command=self._toggle_pause, **ic, state="disabled")
-        self.btn_pause_c.pack(side="left", padx=2)
-        Tooltip(self.btn_pause_c, "⏸ Pause / Resume  [Space]")
-        self.btn_stop_c = tk.Button(self._tb_row2_compact, text="■", bg=EXCLUDE_COLOR, fg="#fff", command=self._stop_test, **ic, state="disabled")
-        self.btn_stop_c.pack(side="left", padx=2)
-        Tooltip(self.btn_stop_c, "■ Stop Test  [Esc / Ctrl+F12]")
+        self.run_controls = RunControls(
+            self._tb_row2_full, self._tb_row2_compact,
+            on_run=self._run_test, on_pause=self._toggle_pause, on_stop=self._stop_test,
+            tooltip=Tooltip)
 
         self._tb_compact = False
         self.after(0, lambda: self.bind("<Configure>", self._on_resize))
@@ -5344,7 +5333,7 @@ class App(tk.Tk):
         self.valid_points, self.all_points = generate_points(self.run_mode.get(), self.active_mon, self.grid_spacing, self.zones)
         self._update_stats()
         has_pts = len(self.zones) > 0 if self.run_mode.get() == "iscs" else len(self.valid_points) > 0
-        self.btn_run.config(state="normal" if has_pts else "disabled")
+        self.run_controls.set_run_enabled(has_pts)
         self.btn_preview.config(state="normal" if len(self.valid_points)>0 else "disabled")
 
     def _refresh(self):
@@ -5358,9 +5347,8 @@ class App(tk.Tk):
         else:
             has_pts = len(self.valid_points) > 0
 
-        self.btn_run.config(state="normal" if has_pts else "disabled")
-        self.btn_run_c.config(state="normal" if has_pts else "disabled")
-        self.btn_preview.config(state="normal" if len(self.valid_points)>0 else "disabled") 
+        self.run_controls.set_run_enabled(has_pts)
+        self.btn_preview.config(state="normal" if len(self.valid_points)>0 else "disabled")
 
         if self.crosshair_overlay:
             self._close_preview()
@@ -5532,13 +5520,7 @@ class App(tk.Tk):
             else:
                 has_pts = len(self.valid_points) > 0
 
-            run_state = "normal" if has_pts else "disabled"
-            self.btn_run.config(state=run_state)
-            self.btn_run_c.config(state=run_state)
-            self.btn_pause.config(state="disabled", text="⏸ Pause  [Space]", bg=PAUSE_COLOR, fg="#000")
-            self.btn_pause_c.config(state="disabled", text="⏸", bg=PAUSE_COLOR, fg="#000")
-            self.btn_stop.config(state="disabled")
-            self.btn_stop_c.config(state="disabled")
+            self.run_controls.set_run_state("idle", can_run=has_pts)
             self.btn_overlay.config(state="normal")
             self.btn_clear_ws.config(state="normal" if self.zones else "disabled")
             self.btn_preview.config(state="normal" if len(self.valid_points)>0 else "disabled")
@@ -5546,28 +5528,19 @@ class App(tk.Tk):
             self.screen_selector.unlock()
 
         elif state == "running":
-            self.btn_run.config(state="disabled")
-            self.btn_run_c.config(state="disabled")
-            self.btn_pause.config(state="normal", text="⏸ Pause  [Space]", bg=PAUSE_COLOR, fg="#000")
-            self.btn_pause_c.config(state="normal", text="⏸", bg=PAUSE_COLOR, fg="#000")
-            self.btn_stop.config(state="normal")
-            self.btn_stop_c.config(state="normal")
+            self.run_controls.set_run_state("running")
             self.btn_overlay.config(state="disabled")
-            self.btn_clear_ws.config(state="disabled") 
+            self.btn_clear_ws.config(state="disabled")
             self.btn_preview.config(state="disabled")
             self.btn_refresh.config(state="disabled")
             self.screen_selector.lock()
 
         elif state == "paused":
-            self.btn_pause.config(text="▶ Resume  [Space]", bg=INCLUDE_COLOR, fg="#000")
-            self.btn_pause_c.config(text="▶", bg=INCLUDE_COLOR, fg="#000")
+            self.run_controls.set_run_state("paused")
             self.stats.set("state", "PAUSED", PAUSE_COLOR)
 
         elif state == "stopping":
-            self.btn_pause.config(state="disabled")
-            self.btn_pause_c.config(state="disabled")
-            self.btn_stop.config(state="disabled")
-            self.btn_stop_c.config(state="disabled")
+            self.run_controls.set_run_state("stopping")
             self.stats.set("state", "STOPPING…", EXCLUDE_COLOR)
 
     # ── Test Execution ────────────────────────────────────────────────────────
