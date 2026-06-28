@@ -4692,9 +4692,16 @@ class Toast(tk.Toplevel):
 
 
 # ── Main Application ──────────────────────────────────────────────────────────
+# M5: Tk driving-adapter dispatcher + views, extracted from this file one at a time.
+from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
+from adapters.driving.ui_tkinter.views.log_sink import LogSink
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        # M5: the Tk app's R-HEX-2 dispatcher — views marshal onto the loop via this.
+        self._dispatcher = TkEventDispatcher(self)
         try:
             myappid = 'willowglen.WilloWisp.v1'  # Arbitrary unique string
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
@@ -4980,13 +4987,10 @@ class App(tk.Tk):
 
         lf = tk.Frame(left_pane, bg="#0f0f0f")
         lf.pack(fill="x", padx=20, pady=(0, 14))
-        self.log_box = tk.Text(lf, height=5, bg="#080808", fg="#aaaaaa", font=("Consolas", 9), relief="flat", state="disabled")
-        sb_log = tk.Scrollbar(lf, command=self.log_box.yview)
-        self._suite_pane = tk.Frame(self._paned, bg="#0f0f0f")
+        self._suite_pane = tk.Frame(self._paned, bg="#0f0f0f")   # unrelated; kept in App
 
-        self.log_box.configure(yscrollcommand=sb_log.set)
-        sb_log.pack(side="right", fill="y")
-        self.log_box.pack(fill="x")
+        # M5: log rendering extracted to the LogSink driving-adapter view.
+        self.log_sink = LogSink(lf, self._dispatcher).pack(fill="x")
 
         self._update_mode_buttons()
 
@@ -5203,12 +5207,9 @@ class App(tk.Tk):
             self._tb_row2_compact.pack_forget(); self._tb_row2_full.pack(fill="x", pady=(2, 2)); self._tb_compact = False
 
     def _log(self, msg):
-        def update():
-            self.log_box.configure(state="normal")
-            self.log_box.insert("end", f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
-            self.log_box.see("end")
-            self.log_box.configure(state="disabled")
-        self.after(0, update)
+        # M5 shim → LogSink. DELETION TICKET: once log lines flow as a LogMessage
+        # event the LogSink subscribes to, callers stop calling this and it's removed.
+        self.log_sink.write(msg)
 
     def _refresh_monitors(self):
         self.monitors = detect_monitors()
