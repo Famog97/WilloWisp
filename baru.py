@@ -4671,6 +4671,7 @@ from adapters.driving.ui_tkinter.views.run_progress_view import RunProgressView
 from adapters.driving.ui_tkinter.views.stats_view import StatsView
 from adapters.driving.ui_tkinter.views.settings_view import SettingsView
 from adapters.driving.ui_tkinter.views.run_controls import RunControls
+from adapters.driving.ui_tkinter.views.mode_view import ModeView
 from core.services.workspace import WorkspaceSession
 
 
@@ -4865,20 +4866,10 @@ class App(tk.Tk):
         self._workspace.zones_per_page = value
 
     def _build_ui(self):
+        # M5: operating-mode selector extracted to the ModeView (builds into mode_f).
         mode_f = tk.Frame(self, bg="#1a1a1a", pady=4, padx=4)
         mode_f.pack(fill="x", padx=20, pady=(10, 0))
-        tk.Label(mode_f, text="OPERATING MODE:", bg="#1a1a1a", fg="#aaa", font=("Consolas", 9, "bold")).pack(side="left", padx=10)
-
-        btn_style = dict(font=("Consolas", 10, "bold"), relief="flat", padx=16, pady=6, cursor="hand2", bd=0)
-
-        self.btn_mode_seq = tk.Button(mode_f, text="🎯 Targeted Sequence (RPA)", command=lambda: self._set_mode("sequence"), **btn_style)
-        self.btn_mode_seq.pack(side="left", padx=4)
-
-        self.btn_mode_grid = tk.Button(mode_f, text="▦ Grid Scan (Fuzzer)", command=lambda: self._set_mode("grid"), **btn_style)
-        self.btn_mode_grid.pack(side="left", padx=4)
-
-        self.btn_mode_iscs = tk.Button(mode_f, text="🚨 Suite Runner", command=lambda: self._set_mode("iscs"), **btn_style)
-        self.btn_mode_iscs.pack(side="left", padx=4)
+        self.mode_view = ModeView(mode_f, self._set_mode)
 
         # Info Button cleanly integrated on the far right of the Operating Mode bar
         self.btn_info = tk.Button(mode_f, text="Info", bg="#222", fg="#ccc", relief="flat", padx=10, pady=6, cursor="hand2", command=lambda: self.help_panel.show_section(name="Whole App"))
@@ -5232,28 +5223,13 @@ class App(tk.Tk):
         self._refresh()
 
     def _update_mode_buttons(self):
-        if not hasattr(self, "btn_mode_seq"): return
+        if not hasattr(self, "mode_view"): return
         mode = self.run_mode.get()
-        
-        has_excel_btn = hasattr(self, "btn_load_excel")
-
-        if mode == "sequence":
-            self.btn_mode_seq.config(bg=TARGET_COLOR,  fg="#000")
-            self.btn_mode_grid.config(bg="#2a2a2a",     fg="#666")
-            self.btn_mode_iscs.config(bg="#2a2a2a",     fg="#666")
-            if has_excel_btn: self.btn_load_excel.config(state="disabled")
-            
-        elif mode == "grid":
-            self.btn_mode_seq.config(bg="#2a2a2a",      fg="#666")
-            self.btn_mode_grid.config(bg=INCLUDE_COLOR, fg="#000")
-            self.btn_mode_iscs.config(bg="#2a2a2a",     fg="#666")
-            if has_excel_btn: self.btn_load_excel.config(state="disabled")
-            
-        elif mode == "iscs":
-            self.btn_mode_seq.config(bg="#2a2a2a",      fg="#666")
-            self.btn_mode_grid.config(bg="#2a2a2a",     fg="#666")
-            self.btn_mode_iscs.config(bg=ALARM_PANEL_COLOR, fg="#fff")
-            if has_excel_btn: self.btn_load_excel.config(state="normal")
+        self.mode_view.set_active(mode)          # M5: highlight delegated to ModeView
+        # The IO-List (import) button is only relevant in ISCS mode; kept here as it's
+        # an import control, not a mode button.
+        if hasattr(self, "btn_load_excel"):
+            self.btn_load_excel.config(state="normal" if mode == "iscs" else "disabled")
 
     def _on_mode_change(self):
         if self.zones:
