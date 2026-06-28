@@ -171,7 +171,7 @@ and the four drop-in extensibility tests pass. The UI is now provably swappable.
 
 | Status | Step | Adapter Unit | Action / Legacy Extraction | Target Destination |
 |:--:|---|---|---|---|
-| [ ] | M5.1 | Tk Event Dispatcher | Implement thread-marshalling dispatcher using `root.after`. | `adapters/driving/ui_tkinter/dispatcher.py` |
+| [x] | M5.1 | Tk Event Dispatcher | Implement thread-marshalling dispatcher using `root.after`. *(`TkEventDispatcher`; + shared `adapters/driving/composition.py` and `ui_tkinter/composition.build_tk_core_api(root)` so the Tk app builds the same facade as the CLI with its own dispatcher. tkinter-free / unit-tested.)* | `adapters/driving/ui_tkinter/dispatcher.py` |
 | [ ] | M5.2 | App Shell & Layout | Extract window geometry, resizing, layouts, and views from legacy `baru.py`. | `adapters/driving/ui_tkinter/app_shell.py` · `adapters/driving/ui_tkinter/views/` |
 | [ ] | M5.3 | Intent Forwarders | Convert Run, Import, Settings, and Card Config controls into thin facade-forwarders. | `adapters/driving/ui_tkinter/views/` |
 | [ ] | M5.4 | Schema Form Renderer | Implement dynamic form generator from step parameters. Delete legacy hand-coded parameter forms. | `adapters/driving/ui_tkinter/renderer.py` |
