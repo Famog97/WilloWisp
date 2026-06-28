@@ -12,6 +12,7 @@ import re
 import threading
 
 from core.ports.protocol import ProtocolPort, BaseProtocol
+from core.domain.io_point_states import write_register, field_width, apply_value
 
 logger = logging.getLogger("AutoClick")
 
@@ -101,30 +102,34 @@ class ModbusProtocol(BaseProtocol):
     def _get_slave(self):
         return self.context[0]
 
-    def _write_coil_or_reg(self, p, state):
+    def _write_coil_or_reg(self, p, value):
         payload = p.get('payload', p)
         raw_fc  = str(payload.get('fc', p.get('fc', '3'))).strip().upper()
         m       = re.search(r'(\d+)', raw_fc)
         fc_num  = int(m.group(1)) if m else 3
 
-        reg   = int(payload.get('reg',  p.get('reg',  0)))
+        reg   = write_register(payload)                       # ISCS address, else source reg
         bit   = int(payload.get('bit',  p.get('bit',  0)))
-        val   = int(state)
+        width = field_width(payload.get('addr_size'), p.get('states', {}))
+        val   = int(value)
         slave = self._get_slave()
 
         mb_log = logging.getLogger("modbus_traffic")
         point_id = p.get('point_id', payload.get('point_id', '?'))
-        action   = "TRIGGER" if val else "RESET"
-        mb_log.info(f"[{action}] point={point_id} fc={fc_num} reg={reg} bit={bit} val={val}")
-        
+        mb_log.info(f"[WRITE val={val}] point={point_id} fc={fc_num} reg={reg} bit={bit} width={width}")
+
         if fc_num in [1, 5]: slave.setValues(1, reg, [bool(val)])
         elif fc_num == 2: slave.setValues(2, reg, [bool(val)])
         elif fc_num == 4: slave.setValues(4, reg, [val & 0xFFFF])
-        else: # Default for 3, 6, 16 and generic registers
+        else: # Default for 3, 6, 16 and generic registers — write the value into its bit-field
             current = slave.getValues(3, reg, 1)
             cur_val = current[0] if current else 0
-            new_val = (cur_val | (1 << bit)) if val else (cur_val & ~(1 << bit))
-            slave.setValues(3, reg, [new_val & 0xFFFF])
+            new_val = apply_value(cur_val, val, bit, width)   # width=1 == old set/clear bit
+            slave.setValues(3, reg, [new_val])
+
+    def write_value(self, p, value):
+        """Write an arbitrary IO-list value (0..N) to the point's register field."""
+        self._write_coil_or_reg(p, value)
 
     def trigger_alarm(self, p): self._write_coil_or_reg(p, 1)
     def reset_alarm(self, p):   self._write_coil_or_reg(p, 0)
