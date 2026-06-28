@@ -4676,6 +4676,7 @@ from adapters.driving.ui_tkinter.views.settings_view import SettingsView
 from adapters.driving.ui_tkinter.views.run_controls import RunControls
 from adapters.driving.ui_tkinter.views.mode_view import ModeView
 from adapters.driving.ui_tkinter.components.canvas_viewport import CanvasViewport
+from adapters.driving.ui_tkinter.hotkey_adapter import HotkeyAdapter
 from core.services.workspace import WorkspaceSession
 
 
@@ -4730,7 +4731,6 @@ class App(tk.Tk):
         self._suite_pane_visible = False
         
         self.click_engine, self.hud, self.crosshair_overlay = None, None, None
-        self._last_run_hk = 0
 
         self.protocols = ProtocolManager(APP_CONFIG)
         self.iscs_excel_points = []
@@ -4750,7 +4750,10 @@ class App(tk.Tk):
 
         self._build_ui()
         self.help_panel = self._init_help_panel()
-        self._register_hotkeys()
+        # M5: global hotkeys handled by the HotkeyAdapter (intents marshalled via the dispatcher).
+        self._hotkeys = HotkeyAdapter(self._dispatcher, on_run=self._run_test,
+                                      on_stop=self._stop_test, on_pause=self._toggle_pause)
+        self._hotkeys.register()
         self.after(0, lambda: self.screen_selector._select(0))
         self._log("WilloWisp v1 ready. Modes: Sequence | Grid | Suite Runner.")
 
@@ -4829,28 +4832,7 @@ class App(tk.Tk):
         panel.withdraw()
         return panel
 
-    def _register_hotkeys(self):
-        if not KEYBOARD_AVAILABLE: return
-        try:
-            keyboard.add_hotkey("ctrl+5", self._hk_run, suppress=False) 
-            keyboard.add_hotkey("ctrl+f12", self._hk_stop, suppress=True)
-            keyboard.add_hotkey("escape", self._hk_stop, suppress=False)
-            keyboard.add_hotkey("space", self._hk_space, suppress=False)
-        except Exception: pass
-
-    def _unregister_hotkeys(self):
-        if not KEYBOARD_AVAILABLE: return
-        try:
-            for hk in ("ctrl+5", "ctrl+f12", "escape", "space"): keyboard.remove_hotkey(hk)
-        except Exception: pass
-
-    def _hk_run(self):
-        now = time.time()
-        if now - self._last_run_hk < 0.5: return
-        self._last_run_hk = now
-        self.after(0, self._run_test)
-    def _hk_stop(self): self.after(0, self._stop_test)
-    def _hk_space(self): self.after(0, self._toggle_pause)
+    # M5: hotkey registration/handlers moved to adapters/.../hotkey_adapter.HotkeyAdapter.
 
     # M3.5: zones / zones_per_page delegate to the core WorkspaceSession (state owner).
     @property
@@ -5655,7 +5637,7 @@ class App(tk.Tk):
         self._ocr_monitor_win = OcrMonitorPanel(self, self.active_mon)
 
     def destroy(self):
-        self._unregister_hotkeys()
+        self._hotkeys.unregister()
         self._close_preview()
         try:
             self.protocols.stop_all()
