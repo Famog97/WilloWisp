@@ -83,7 +83,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [~] `_analyze_image` (2) / `_preprocess_for_ocr` (2) / `_ocr_image` (4) → `adapters/driven/perception/tesseract_ocr.py` (`OcrReader`/`OcrPreprocessor`)  — **relocated** (split deferred)
 - [~] `_color_present` (28) → `core/services/verifier.py` (`ColorSampler`/`ColorComparator`)  — **relocated** (split deferred)
 - [~] `_blink_color_present` (21) → `core/services/verifier.py` (`BlinkAnalyzer`)  — **relocated** (split deferred)
-- [~] `verify_alarm_panel` (256) → **decompose** into `core/services/verifier.py`: `StatePoller` + `FrameSampleCoordinator` + `TimestampExtractor`/`ClockSyncEvaluator` + `AlarmPanel/NormalizationVerificationPolicy` + `EvidenceScreenshotWriter` (gated by M0.1)  — **relocated** (split deferred)
+- [x] `verify_alarm_panel` (256) → **M3.2 DECOMPOSED** (gated by M0.1 characterization test): pure decision → `core/services/verification_policy.AlarmPanelVerificationPolicy` (per-row sub-checks: datetime/identifier/description/value/severity/color); perception → `_observe_panel` + `_poll_panel_text` (StatePoller) + `_evaluate_panel_color`/`_color_burst` (FrameSampleCoordinator) + `_reocr_severity_cell` + `_save_panel_screenshot` (EvidenceScreenshotWriter); `PanelObservation` value object (`core/domain/observation.py`). Coordinator is now ~18 lines; no function >~30 lines. *(verifier.py = perception engine, 376 lines — further perception sub-split optional.)*
 - [~] `verify_list` (59) → `core/services/verifier.py` (`ListVerificationPolicy`)  — **relocated** (split deferred)
 
 ### 1.5 Evidence
