@@ -4695,6 +4695,7 @@ class Toast(tk.Toplevel):
 # M5: Tk driving-adapter dispatcher + views, extracted from this file one at a time.
 from adapters.driving.ui_tkinter.dispatcher import TkEventDispatcher
 from adapters.driving.ui_tkinter.views.log_sink import LogSink
+from core.services.workspace import WorkspaceSession
 
 
 class App(tk.Tk):
@@ -4702,6 +4703,9 @@ class App(tk.Tk):
         super().__init__()
         # M5: the Tk app's R-HEX-2 dispatcher — views marshal onto the loop via this.
         self._dispatcher = TkEventDispatcher(self)
+        # M3.5: the live zone working set lives in a core WorkspaceSession.
+        self._workspace = WorkspaceSession()
+
         try:
             myappid = 'willowglen.WilloWisp.v1'  # Arbitrary unique string
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
@@ -4737,8 +4741,8 @@ class App(tk.Tk):
 
         self.monitors = detect_monitors()
         self.active_mon = self.monitors[0]
-        self.zones, self.valid_points, self.all_points = [], [], []
-        self.zones_per_page = {}   # per-page zones for ISCS mode
+        self.valid_points, self.all_points = [], []
+        # zones / zones_per_page now live in self._workspace (M3.5), via properties.
         self.run_mode = tk.StringVar(value="sequence")  
         self.grid_spacing = GRID_SPACING
         self.suite_panel = None
@@ -4859,6 +4863,23 @@ class App(tk.Tk):
         self.after(0, self._run_test)
     def _hk_stop(self): self.after(0, self._stop_test)
     def _hk_space(self): self.after(0, self._toggle_pause)
+
+    # M3.5: zones / zones_per_page delegate to the core WorkspaceSession (state owner).
+    @property
+    def zones(self):
+        return self._workspace.zones
+
+    @zones.setter
+    def zones(self, value):
+        self._workspace.zones = value
+
+    @property
+    def zones_per_page(self):
+        return self._workspace.zones_per_page
+
+    @zones_per_page.setter
+    def zones_per_page(self, value):
+        self._workspace.zones_per_page = value
 
     def _build_ui(self):
         mode_f = tk.Frame(self, bg="#1a1a1a", pady=4, padx=4)
@@ -5335,9 +5356,8 @@ class App(tk.Tk):
         self._update_overlay_btn()
 
     def _clear_workspace(self):
-        # Clear the live workspace display only
-        self.zones.clear()
-        self.zones_per_page.clear()
+        # M3.5: reset the live working set via the core WorkspaceSession.
+        self._workspace.clear()
 
         # Deselect the card — card's own zones are NOT touched
         if self.suite_panel:

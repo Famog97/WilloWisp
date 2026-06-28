@@ -109,7 +109,7 @@ then — only once every box in a migration phase is `[x]` — tick that phase i
 - [ ] `App` monitors/zones: `_refresh_monitors` / `_on_screen_selected` / `_find_monitor_by_info` / `_capture_monitor_thumbnail` / `_draw_minimap` / `_open_overlay` / `_overlay_done` / `_save_zones` / `_load_zones` / `_update_overlay_btn` → `adapters/driving/ui_tkinter/views/` (zone/monitor views; data via facade)
 - [ ] `App` mode/run: `_set_mode` / `_update_mode_buttons` / `_on_mode_change` / `_run_test` / `_stop_test` / `_test_finished` / `_toggle_pause` / `_toggle_suite` / `set_execution_state` (45) / `_cb_progress` / `_cb_paused` / `_cb_done` / `_on_auto_paused` → `adapters/driving/ui_tkinter/views/run_controls.py` (**intent-forward to facade only**; `ExecutionStateView`)
 - [ ] `App._settings_dialog` (124) → `adapters/driving/ui_tkinter/views/settings_view.py` (read/write via `core/services/config.py`)
-- [ ] `App._clear_workspace` (12) → calls `core/services/workspace.py` (`WorkspaceSession.reset`)
+- [x] `App._clear_workspace` (12) → **M3.5 DONE**: state-reset delegates to `core/services/workspace.WorkspaceSession.clear()`; the zone working set (`zones`/`zones_per_page`) now lives in the session, exposed on `App` via property getter/setter so all call sites are unchanged. UI bits (deselect card, refresh) stay in `App`.
 - [ ] `App._sync_open_card_config` (12) → `adapters/driving/ui_tkinter/views/card_config_view.py`
 - [ ] `App._log` (7) → `adapters/driving/ui_tkinter/views/log_sink.py`
 - [ ] `App` stats: `_refresh` / `_refresh_stats_only` / `_update_stats` → `adapters/driving/ui_tkinter/views/stats_view.py`
