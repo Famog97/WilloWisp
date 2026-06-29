@@ -68,8 +68,13 @@ class TriggerAlarmAction:
             _log(ctx, "SKIPPED: Standalone run contains no active Modbus/SNMP IO point.")
             return StepResult(StepStatus.SKIP)
 
-        # 1. Trigger the alarm FIRST
-        runner.handler.trigger_alarm(ec.pt)
+        # 1. Trigger FIRST — write the IO-list trigger value (handles multi-bit /
+        # non-1 alarm values); fall back to trigger_alarm for non-Modbus handlers.
+        value = getattr(ec, "trigger_idx", 1)
+        if hasattr(runner.handler, "write_value"):
+            runner.handler.write_value(ec.pt, value)
+        else:
+            runner.handler.trigger_alarm(ec.pt)
         ec.trigger_time = datetime.datetime.now()
         ec.trigger_ns = time.time_ns()
         ec.trigger_ok = True
@@ -96,8 +101,13 @@ class ResetAlarmAction:
             _log(ctx, "SKIPPED: Standalone run contains no active Modbus/SNMP IO point.")
             return StepResult(StepStatus.SKIP)
 
-        # 1. Reset the alarm FIRST
-        runner.handler.reset_alarm(ec.pt)
+        # 1. Reset FIRST — write the baseline value (severity-0 state, not assumed 0);
+        # fall back to reset_alarm for non-Modbus handlers.
+        value = getattr(ec, "reset_idx", 0)
+        if hasattr(runner.handler, "write_value"):
+            runner.handler.write_value(ec.pt, value)
+        else:
+            runner.handler.reset_alarm(ec.pt)
         ec.reset_ns = time.time_ns()
         ec.reset_ok = True
         _log(ctx, "Alarm reset.")

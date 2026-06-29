@@ -23,6 +23,8 @@ def _get_state_indices(pt):
     
     Returns (trigger_idx, reset_idx) as integers.
     """
+    from core.domain.io_point_states import baseline_value
+
     states = pt.get("states", {})
     if not states:
         return 1, 0   # absolute last resort fallback only if states completely missing
@@ -30,7 +32,15 @@ def _get_state_indices(pt):
     if len(keys) == 1:
         # Only one state defined — treat it as trigger, no reset check possible
         return keys[0], keys[0]
-    return keys[-1], keys[0]   # highest = trigger, lowest = reset/normal
+    # Reset/normal = the severity-0 state (scanned, NOT assumed value 0); trigger = the
+    # highest non-baseline value. For classic v0=normal lists this stays (highest, 0).
+    norm = {int(k): v for k, v in states.items() if str(k).lstrip("-").isdigit()}
+    base = baseline_value(norm)
+    if base is None:
+        base = keys[0]
+    non_base = [k for k in keys if k != base]
+    trigger = max(non_base) if non_base else keys[-1]
+    return trigger, base
 
 
 def _get_expected_for_value(point, triggered_value):
