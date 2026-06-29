@@ -31,6 +31,9 @@ from core.services.text_match import _ocr_contains, _ocr_fuzzy_contains
 from core.services.config import SEVERITY_MATRIX
 from core.domain.results import VerifyResult
 from core.domain.observation import PanelObservation
+from core.domain.color_match import (
+    classify_alarm_color, classify_with_votes, palette_from_matrix,
+)
 from core.services.verification_policy import AlarmPanelVerificationPolicy
 
 logger = logging.getLogger("AutoClick")
@@ -58,6 +61,8 @@ class ISCSVerifier:
         self.config = config
         self.anchor_mgr = anchor_mgr  # Feature 1: AnchorManager (optional)
         self.stop_event = stop_event
+        # Palette for reading the panel's ACTUAL colour (red/orange/yellow/green).
+        self._palette = palette_from_matrix(self.severity_matrix)
 
     def _get_color_name(self, rgb):
         """Dynamic color-name resolver referencing the Severity Matrix."""
@@ -65,6 +70,32 @@ class ISCSVerifier:
             if entry.get("color") == rgb:
                 return entry.get("name", "")
         return ""
+
+    def _histogram(self, img):
+        """A getcolors()-style [(count, rgb), ...] histogram, sampling if the frame
+        has too many distinct colours for getcolors() to enumerate."""
+        if img is None:
+            return []
+        try:
+            colors = img.getcolors(maxcolors=1 << 20)
+            if colors is not None:
+                return colors
+            px, (w, h) = img.load(), img.size
+            step = max(1, min(w, h) // 60)
+            counts = {}
+            for y in range(0, h, step):
+                for x in range(0, w, step):
+                    c = px[x, y]
+                    c = c[:3] if isinstance(c, tuple) else (c, c, c)
+                    counts[c] = counts.get(c, 0) + 1
+            return [(n, c) for c, n in counts.items()]
+        except Exception:
+            return []
+
+    def _classify_image_color(self, img):
+        """The severity-palette colour the panel is actually showing in this frame,
+        or None if the frame shows no alarm colour (e.g. the blink-off / grey frame)."""
+        return classify_alarm_color(self._histogram(img), self._palette)
 
     def _get_zone_bbox(self, zone_type: str, fallback_zone=None):
         """
@@ -217,9 +248,12 @@ class ISCSVerifier:
             _bbox, point_id, label, lang, deadline, trigger_ns)
         found_target, found_grey, best_img = self._evaluate_panel_color(
             _bbox, target_rgb, sampler, trigger_ns, deadline, best_img)
+        # Read the colour the panel is ACTUALLY showing (independent of what was
+        # expected) so the policy can fail a wrong severity colour.
+        detected_color = self._classify_image_color(best_img)
         return PanelObservation(best_img=best_img, merged_text=merged_text,
                                 found_target=found_target, found_grey=found_grey,
-                                elapsed_latency=elapsed)
+                                elapsed_latency=elapsed, detected_color=detected_color)
 
     def _poll_panel_text(self, _bbox, point_id, label, lang, deadline, trigger_ns):
         """Poll the panel with OCR until the exact identifier + value appear (or time out)."""
@@ -267,12 +301,18 @@ class ISCSVerifier:
         return found_target, found_grey, best_img
 
     def _color_burst(self, _bbox, target_rgb, best_img):
-        """Grab a short burst of frames; pass if the colour shows in ANY (blink tolerant)."""
+        """Grab a short burst of frames; pass if the colour shows in ANY (blink tolerant).
+
+        Also keep the most colour-saturated frame, so colour classification + evidence
+        have a frame that genuinely shows the alarm colour even when it is the WRONG
+        colour (a mismatch) and the expected target therefore never matches.
+        """
         found_target = found_grey = False
         frames = int(self.config.get("blink_burst_frames", 8))
         total  = float(self.config.get("blink_burst_sec", 1.0))
         interval = (total / frames) if frames > 0 else 0.12
         color_frame = None
+        lit_frame, lit_votes = None, 0
         for _ in range(max(1, frames)):
             if self.stop_event and self.stop_event.is_set():
                 break
@@ -280,6 +320,9 @@ class ISCSVerifier:
                 frame = ImageGrab.grab(bbox=_bbox, all_screens=True)
             except Exception:
                 break
+            _, votes = classify_with_votes(self._histogram(frame), self._palette)
+            if votes > lit_votes:
+                lit_frame, lit_votes = frame, votes
             if self._color_present(frame, target_rgb, tolerance=35):
                 found_target = True
                 if color_frame is None:
@@ -289,8 +332,7 @@ class ISCSVerifier:
             if found_target and found_grey:
                 break
             time.sleep(interval)
-        if color_frame is not None:
-            best_img = color_frame
+        best_img = color_frame or lit_frame or best_img
         return found_target, found_grey, best_img
 
     def _reocr_severity_cell(self, best_img, sev_text) -> bool:

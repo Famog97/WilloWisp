@@ -107,10 +107,29 @@ class AlarmPanelVerificationPolicy:
         return VerifyResult(f"{step}/severity", "FAIL", f"'{sev}' NOT found in OCR text.")
 
     def _check_color(self, expected, obs, step) -> VerifyResult:
+        """Compare the colour the panel ACTUALLY shows against the colour the IO-list
+        severity implies. Colour is not in the IO list — it is derived from severity
+        (sev 1->RED, 2->ORANGE, 3->YELLOW, 0->GREEN) — so a point marked severity 2 must
+        display ORANGE; if the system shows RED (value 1) the colour row must FAIL.
+        """
         rgb = expected.get("color", (255, 0, 0))
-        name = self._color_namer(rgb)
-        label = f"{name} {rgb}" if name else str(rgb)
-        if obs.found_target:
-            blink = " (blink detected)" if obs.found_grey else ""
-            return VerifyResult(f"{step}/color", "PASS", f"Alarm color {label} detected{blink}.")
-        return VerifyResult(f"{step}/color", "FAIL", f"Alarm color {label} NOT detected.")
+        exp_name = self._color_namer(rgb) or str(rgb)
+        exp_label = f"{exp_name} {rgb}"
+        blink = " (blink detected)" if obs.found_grey else ""
+        actual = getattr(obs, "detected_color", None)   # palette name actually shown, or None
+
+        # When we can read the panel's real colour it is the source of truth: it must
+        # match the severity-derived expectation. A wrong colour fails here even though
+        # the panel did "light up".
+        if actual is not None and actual != exp_name:
+            return VerifyResult(
+                f"{step}/color", "FAIL",
+                f"Expected {exp_label} (severity-derived) but panel shows {actual}{blink}.")
+
+        # Real colour matched, or could not be read (e.g. blink-off frame): fall back to
+        # liveness — did the expected colour appear at all?
+        if obs.found_target or actual == exp_name:
+            shown = actual or exp_name
+            return VerifyResult(f"{step}/color", "PASS",
+                                f"Alarm color {shown} {rgb} detected{blink}.")
+        return VerifyResult(f"{step}/color", "FAIL", f"Alarm color {exp_label} NOT detected{blink}.")

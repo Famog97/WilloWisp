@@ -16,6 +16,7 @@ from typing import Any
 class PanelObservation:
     best_img: Any = None          # PIL image of the best-evidence frame (or None)
     merged_text: str = ""         # OCR text read from the panel
-    found_target: bool = False    # the alarm colour was seen
+    found_target: bool = False    # the (expected) alarm colour was seen
     found_grey: bool = False      # the blink "off" colour was seen
     elapsed_latency: float = 0.0  # seconds from trigger to first confirmed frame
+    detected_color: Any = None    # the alarm colour ACTUALLY shown (palette name), or None
