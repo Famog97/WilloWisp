@@ -43,6 +43,25 @@ def _get_state_indices(pt):
     return trigger, base
 
 
+def sweep_trigger_values(pt) -> list:
+    """Every value this point should be triggered + verified at, ascending.
+
+    A classic 2-state point (e.g. AMS v0=NORMAL / v1=ALARM) yields a single value,
+    so the run is byte-for-byte the old single-trigger behaviour. A multi-state point
+    (e.g. ES v0/v2/v3 around baseline v1=CLOSE) yields every non-baseline value, so the
+    run sweeps each alarm state instead of only the highest.
+    """
+    from core.domain.io_point_states import trigger_values
+
+    trigger_idx, reset_idx = _get_state_indices(pt)
+    states = pt.get("states", {})
+    norm = {int(k): v for k, v in states.items() if str(k).lstrip("-").isdigit()}
+    if not norm:
+        return [trigger_idx]
+    vals = trigger_values(norm, reset_idx)
+    return vals if vals else [trigger_idx]
+
+
 def _get_expected_for_value(point, triggered_value):
     states = point.get("states", {})
     # States keys may be int or string depending on whether loaded from DB,

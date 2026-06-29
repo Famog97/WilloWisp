@@ -434,7 +434,9 @@ class ProcedureRunner:
         
     def _run_point(self, pt: dict, idx: int, sc_dir: Path) -> ExecutionTrace:
         # M3.4: expected-state helpers now live in core (no longer a baru tendril).
-        from core.services.expected_state import _get_state_indices, build_expected
+        from core.services.expected_state import (
+            _get_state_indices, build_expected, sweep_trigger_values,
+        )
 
         point_id = pt.get("point_id", f"pt_{idx}")
         trace    = ExecutionTrace(point_id=point_id, start_time=datetime.datetime.now())
@@ -445,70 +447,96 @@ class ProcedureRunner:
         except ImportError:
             SAMPLER_OK = False
 
-        # Build shared execution context
-        trigger_idx, reset_idx = _get_state_indices(pt)
-        ctx = ExecContext(
-            point_id       = point_id,
-            pt             = pt,
-            trigger_idx    = trigger_idx,
-            reset_idx      = reset_idx,
-            expected_alarm = build_expected(pt, trigger_idx),
-            expected_norm  = build_expected(pt, reset_idx),
-            zones_dict     = self.verifier.zones if hasattr(self.verifier, "zones") else {},
-            sc_dir         = sc_dir,
-            point_idx      = idx,
-            anchor_mgr     = getattr(self.verifier, "anchor_mgr", None)
-        )
+        # Build the shared execution context once (bbox/anchor are pass-independent),
+        # then sweep every trigger value. A 2-state point sweeps exactly one value, so
+        # this is identical to the old single-trigger run; a multi-state point (e.g. ES
+        # v0/v2/v3 around baseline v1) triggers + verifies each alarm state in turn.
+        _, reset_idx = _get_state_indices(pt)
+        sweep = sweep_trigger_values(pt)
+        ctx = self._build_point_ctx(pt, idx, sc_dir, reset_idx)
+        steps_to_run = self._resolve_steps(ctx)
 
+        for trig_val in sweep:
+            if self._stop.is_set():
+                break
+            self._reset_pass_state(ctx)
+            ctx.trigger_idx    = trig_val
+            ctx.expected_alarm = build_expected(pt, trig_val)
+            if len(sweep) > 1:
+                lbl = (ctx.expected_alarm or {}).get("label", "")
+                self.on_log(f"    → state v{trig_val} ({lbl})")
+            self._run_steps(ctx, steps_to_run, trace, SAMPLER_OK)
+
+        self._finalize_trace(trace, ctx, pt, idx, sc_dir)
+        return trace
+
+    # ── Per-point helpers ────────────────────────────────────────────────────
+
+    def _build_point_ctx(self, pt: dict, idx: int, sc_dir: Path, reset_idx: int) -> "ExecContext":
+        """The shared per-point ExecContext: baseline/reset state + a pre-resolved
+        alarm-panel bbox. Trigger fields are filled per sweep pass, not here."""
+        from core.services.expected_state import build_expected
+        ctx = ExecContext(
+            point_id      = pt.get("point_id", f"pt_{idx}"),
+            pt            = pt,
+            reset_idx     = reset_idx,
+            expected_norm = build_expected(pt, reset_idx),
+            zones_dict    = self.verifier.zones if hasattr(self.verifier, "zones") else {},
+            sc_dir        = sc_dir,
+            point_idx     = idx,
+            anchor_mgr    = getattr(self.verifier, "anchor_mgr", None),
+        )
         if ctx.anchor_mgr:
             ctx.anchor_mgr.clear_resolution_cache()
-
-        # Pre-resolve alarm panel bbox once
         alarm_zone = getattr(self.verifier, "alarm_zone", None)
         if alarm_zone:
             ctx.resolved_bbox = (alarm_zone.x1, alarm_zone.y1, alarm_zone.x2, alarm_zone.y2)
-            anchor_mgr = getattr(self.verifier, "anchor_mgr", None)
-            if anchor_mgr:
-                resolved = anchor_mgr.resolve("alarm_panel")
+            if ctx.anchor_mgr:
+                resolved = ctx.anchor_mgr.resolve("alarm_panel")
                 if resolved:
                     ctx.resolved_bbox = resolved
+        return ctx
 
-        # Track which dependencies passed (for conditional skipping)
-        passed_names: set[str] = set()
-        failed_names: set[str] = set()
-
-        # ── Resolve steps: use IO group if tree structure exists ──────────
-        point_id_key = ctx.point_id
+    def _resolve_steps(self, ctx: "ExecContext"):
+        """Enabled steps for this point — its IO group when the flow is a tree, else flat."""
         io_group = None
         if self.flow.has_io_groups():
-            io_group = self.flow.get_io_group_by_point(point_id_key)
-        steps_to_run = io_group.enabled_steps if io_group else self.flow.enabled_procedures
+            io_group = self.flow.get_io_group_by_point(ctx.point_id)
+        return io_group.enabled_steps if io_group else self.flow.enabled_procedures
 
+    @staticmethod
+    def _reset_pass_state(ctx: "ExecContext") -> None:
+        """Clear per-trigger timing/samplers so each swept value starts clean
+        (shared bbox / anchor / zones are preserved across passes)."""
+        ctx.trigger_ok = ctx.reset_ok = False
+        ctx.trigger_time = ctx.trigger_ns = None
+        ctx.reset_ns = None
+        ctx.sampler = ctx.norm_sampler = None
+
+    def _run_steps(self, ctx: "ExecContext", steps_to_run, trace, SAMPLER_OK) -> None:
+        """One trigger → verify → reset → normalize cycle, honouring dependency gates."""
+        passed_names: set[str] = set()
+        failed_names: set[str] = set()
         for proc in steps_to_run:
             if self._stop.is_set():
                 break
-
-            # Dependency gate: skip if a required prior step failed
             if proc.depends_on:
                 blocked = [dep for dep in proc.depends_on if dep in failed_names]
                 if blocked:
                     pr = self._make_skip_result(proc, f"Skipped — dependency failed: {blocked}")
                     trace.results.append(pr)
                     continue
-
             pr = self._execute_procedure(proc, ctx, SAMPLER_OK)
             trace.results.append(pr)
-
             if pr.passed:
                 passed_names.add(proc.name)
             elif pr.failed:
                 failed_names.add(proc.name)
 
-        trace.end_time = datetime.datetime.now()
-
-        # Always record basic trigger timing so the report can show "when the
-        # alarm was triggered" even on PASSING points or pure custom-check
-        # points (the full failure_diagnostics block is only built on FAIL).
+    def _finalize_trace(self, trace, ctx: "ExecContext", pt: dict, idx: int, sc_dir: Path) -> None:
+        """Record trigger timing (always) and, on FAIL, collect failure evidence."""
+        # Basic trigger timing so the report can show "when the alarm was triggered"
+        # even on PASSING / pure custom-check points (full diagnostics only on FAIL).
         try:
             import datetime as _dt2
             trig_dt = ctx.trigger_time
@@ -522,7 +550,6 @@ class ProcedureRunner:
         except Exception:
             pass
 
-        # Failure evidence collection (unchanged from SuiteRunner)
         if trace.overall == "FAIL":
             all_verify = [vr for pr in trace.results for vr in pr.verify_results]
             try:
@@ -543,8 +570,6 @@ class ProcedureRunner:
                 trace.shared_ctx["failure_diagnostics"] = diag
             except Exception as fe:
                 logger.warning(f"ProcedureRunner: FailureEvidenceCollector failed: {fe}")
-
-        return trace
 
     # ── Procedure dispatcher ────────────────────────────────────────────────═
 
