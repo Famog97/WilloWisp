@@ -118,18 +118,20 @@ class AlarmPanelVerificationPolicy:
         blink = " (blink detected)" if obs.found_grey else ""
         actual = getattr(obs, "detected_color", None)   # palette name actually shown, or None
 
-        # When we can read the panel's real colour it is the source of truth: it must
-        # match the severity-derived expectation. A wrong colour fails here even though
-        # the panel did "light up".
-        if actual is not None and actual != exp_name:
+        # When we can read the panel's real colour it is the SOLE source of truth: it must
+        # match the severity-derived expectation. A wrong colour fails here even though the
+        # panel did "light up" (this is the negative-test case the old check missed).
+        if actual is not None:
+            if actual == exp_name:
+                return VerifyResult(f"{step}/color", "PASS",
+                                    f"Alarm color {actual} {rgb} detected{blink}.")
             return VerifyResult(
                 f"{step}/color", "FAIL",
                 f"Expected {exp_label} (severity-derived) but panel shows {actual}{blink}.")
 
-        # Real colour matched, or could not be read (e.g. blink-off frame): fall back to
+        # Colour could not be read at all (e.g. only blink-off frames): fall back to
         # liveness — did the expected colour appear at all?
-        if obs.found_target or actual == exp_name:
-            shown = actual or exp_name
+        if obs.found_target:
             return VerifyResult(f"{step}/color", "PASS",
-                                f"Alarm color {shown} {rgb} detected{blink}.")
+                                f"Alarm color {exp_label} detected{blink}.")
         return VerifyResult(f"{step}/color", "FAIL", f"Alarm color {exp_label} NOT detected{blink}.")

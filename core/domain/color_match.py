@@ -83,6 +83,20 @@ def classify_alarm_color(colors, palette, *, max_dist: float = 90.0,
                                sat_threshold=sat_threshold)[0]
 
 
+def dominant_saturated_rgb(colors, *, sat_threshold: int = 40) -> Optional[RGB]:
+    """The single most common non-background colour in the histogram (the panel's real
+    alarm colour), for diagnostics/evidence. None if the panel shows only grey/white."""
+    best_rgb, best_count = None, -1
+    for entry in colors or []:
+        count, raw = entry
+        rgb = _as_rgb(raw)
+        if is_background(rgb, sat_threshold):
+            continue
+        if int(count) > best_count:
+            best_rgb, best_count = rgb, int(count)
+    return best_rgb
+
+
 def palette_from_matrix(matrix) -> List[Tuple[str, RGB]]:
     """Severity matrix ``{sev: {color, name}}`` -> ``[(name, rgb)]`` for classification."""
     out: List[Tuple[str, RGB]] = []

@@ -33,6 +33,7 @@ from core.domain.results import VerifyResult
 from core.domain.observation import PanelObservation
 from core.domain.color_match import (
     classify_alarm_color, classify_with_votes, palette_from_matrix,
+    dominant_saturated_rgb,
 )
 from core.services.verification_policy import AlarmPanelVerificationPolicy
 
@@ -96,6 +97,39 @@ class ISCSVerifier:
         """The severity-palette colour the panel is actually showing in this frame,
         or None if the frame shows no alarm colour (e.g. the blink-off / grey frame)."""
         return classify_alarm_color(self._histogram(img), self._palette)
+
+    def _detect_actual_color(self, _bbox, fallback_img=None):
+        """Read the colour the panel is ACTUALLY showing — independent of the expected
+        colour and of the sampler. Grabs a short burst (to catch the alarm-on phase of a
+        blink), classifies the most colour-saturated frame against the severity palette,
+        and returns ``(name|None, dominant_rgb|None, evidence_img)``.
+
+        This is the source of truth for the colour row: a wrong colour is read as what it
+        really is (RED), not as the expected ORANGE.
+        """
+        best_name, best_votes, best_rgb, best_frame = None, 0, None, None
+        if _bbox and ImageGrab is not None:
+            frames = int(self.config.get("blink_burst_frames", 8))
+            total  = float(self.config.get("blink_burst_sec", 1.0))
+            interval = (total / frames) if frames > 0 else 0.12
+            for _ in range(max(1, frames)):
+                if self.stop_event and self.stop_event.is_set():
+                    break
+                try:
+                    frame = ImageGrab.grab(bbox=_bbox, all_screens=True)
+                except Exception:
+                    break
+                hist = self._histogram(frame)
+                name, votes = classify_with_votes(hist, self._palette)
+                if name is not None and votes > best_votes:
+                    best_name, best_votes = name, votes
+                    best_rgb, best_frame = dominant_saturated_rgb(hist), frame
+                time.sleep(interval)
+        if best_name is not None:
+            return best_name, best_rgb, best_frame
+        # Nothing saturated in the burst -> classify whatever evidence frame we have.
+        hist = self._histogram(fallback_img)
+        return classify_alarm_color(hist, self._palette), dominant_saturated_rgb(hist), fallback_img
 
     def _get_zone_bbox(self, zone_type: str, fallback_zone=None):
         """
@@ -248,9 +282,14 @@ class ISCSVerifier:
             _bbox, point_id, label, lang, deadline, trigger_ns)
         found_target, found_grey, best_img = self._evaluate_panel_color(
             _bbox, target_rgb, sampler, trigger_ns, deadline, best_img)
-        # Read the colour the panel is ACTUALLY showing (independent of what was
-        # expected) so the policy can fail a wrong severity colour.
-        detected_color = self._classify_image_color(best_img)
+        # Read the colour the panel is ACTUALLY showing (independent of what was expected
+        # and of the sampler) so the policy can fail a wrong severity colour.
+        detected_color, actual_rgb, color_img = self._detect_actual_color(_bbox, best_img)
+        if color_img is not None:
+            best_img = color_img            # evidence shows the real colour
+        logger.info(f"verify_alarm_panel colour: expected={target_rgb} "
+                    f"detected={detected_color} (actual_rgb={actual_rgb}) "
+                    f"found_target={found_target}")
         return PanelObservation(best_img=best_img, merged_text=merged_text,
                                 found_target=found_target, found_grey=found_grey,
                                 elapsed_latency=elapsed, detected_color=detected_color)

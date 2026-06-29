@@ -7,7 +7,7 @@ verifier can fail the colour row, instead of echoing the expected ORANGE.
 """
 from core.domain.color_match import (
     classify_alarm_color, classify_with_votes, nearest_color, is_background,
-    palette_from_matrix,
+    palette_from_matrix, dominant_saturated_rgb,
 )
 from core.services.config import SEVERITY_MATRIX
 
@@ -65,3 +65,9 @@ def test_grey_only_panel_has_no_alarm_colour():
 def test_votes_count_reflects_dominant_pixels():
     name, votes = classify_with_votes(_hist((5000, RED), (3000, GREY)), PALETTE)
     assert name == "RED" and votes == 5000
+
+
+def test_dominant_saturated_rgb_ignores_grey_and_white():
+    # the real (measured) panel colour, for diagnostics — grey/white don't count
+    assert dominant_saturated_rgb(_hist((9000, GREY), (4000, RED), (8000, WHITE))) == RED
+    assert dominant_saturated_rgb(_hist((100, GREY), (50, WHITE))) is None
