@@ -6,6 +6,7 @@ Each `states` dict mirrors what the parser extracts from the vN columns:
 """
 from core.domain.io_point_states import (
     baseline_value, trigger_values, field_width, apply_value, write_register,
+    normalize_register,
 )
 
 
@@ -73,3 +74,42 @@ def test_apply_value_multibit_writes_whole_field():
     # field is replaced, neighbouring bits preserved
     assert apply_value(0b1100, 1, bit_offset=0, width=2) == 0b1101
     assert apply_value(0b0011, 0, bit_offset=0, width=2) == 0b0000
+
+
+def test_normalize_register_base_40000_and_raw():
+    # 4xxxx holding-register convention: base-40000.
+    assert normalize_register(40000) == 0       # ES first point
+    assert normalize_register(40001) == 1        # TWP
+    assert normalize_register(40002) == 2        # TWP
+    assert normalize_register(40010) == 10       # ES source register
+    assert normalize_register(40030) == 30
+    # raw small addresses pass through (AMS) -> same slot as 40030.
+    assert normalize_register(30) == 30
+    assert normalize_register(0) == 0
+    # 40030 and a raw 30 must resolve to the SAME datastore register.
+    assert normalize_register(40030) == normalize_register(30)
+    # junk -> 0, never raises.
+    assert normalize_register(None) == 0
+    assert normalize_register("") == 0
+
+
+def test_datastore_roundtrips_at_normalized_addresses():
+    """The real bug: 4xxxx addresses overflowed the 1..10000 block (set 7 -> read garbage).
+    After normalize_register + the address-0 block, every point round-trips cleanly."""
+    import pytest
+    pymodbus = pytest.importorskip("pymodbus.datastore")
+    ModbusSequentialDataBlock = pymodbus.ModbusSequentialDataBlock
+
+    block = ModbusSequentialDataBlock(0, [0] * 10001)   # matches modbus.py
+    cases = {
+        "AMS": 30,         # raw, was already in range
+        "TWP_1": 40001,    # was OUT OF range -> read garbage
+        "TWP_2": 40002,
+        "ES_iscs": 40000,  # register 0 -> needs the address-0 block
+        "ES_src": 40010,
+    }
+    for name, excel_reg in cases.items():
+        addr = normalize_register(excel_reg)
+        block.setValues(addr, [7])
+        assert block.getValues(addr, 1) == [7], f"{name} ({excel_reg}->{addr}) did not round-trip"
+        block.setValues(addr, [0])           # reset for the next case

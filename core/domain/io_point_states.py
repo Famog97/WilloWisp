@@ -78,6 +78,20 @@ def apply_value(cur_reg: int, value: int, bit_offset: int, width: int) -> int:
     return ((cur_reg & ~mask) | ((value << bit_offset) & mask)) & 0xFFFF
 
 
+def normalize_register(reg) -> int:
+    """Convert an IO-list register to the datastore/PDU address.
+
+    The 4xxxx Modbus holding-register convention is base-40000 (40000 -> 0, 40001 -> 1,
+    40030 -> 30); raw small addresses (e.g. AMS's 30) are already PDU addresses and pass
+    through unchanged. So both `40030` and a raw `30` resolve to datastore register 30.
+    """
+    try:
+        r = int(reg)
+    except (TypeError, ValueError):
+        return 0
+    return r - 40000 if r >= 40000 else r
+
+
 def write_register(payload: dict) -> int:
     """The register ISCS actually reads/writes.
 

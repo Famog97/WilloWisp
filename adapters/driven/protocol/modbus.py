@@ -12,7 +12,7 @@ import re
 import threading
 
 from core.ports.protocol import ProtocolPort, BaseProtocol
-from core.domain.io_point_states import write_register, field_width, apply_value
+from core.domain.io_point_states import write_register, field_width, apply_value, normalize_register
 
 logger = logging.getLogger("AutoClick")
 
@@ -32,7 +32,8 @@ class ModbusProtocol(BaseProtocol):
         self.log_callback = log_callback
         self.slave_id = 1
         
-        block = lambda: ModbusSequentialDataBlock(1, [0]*10000)
+        # Start at address 0 so register 0 (e.g. ISCS 40000 -> 0) is addressable.
+        block = lambda: ModbusSequentialDataBlock(0, [0]*10001)
         store = ModbusDeviceContext(di=block(), co=block(), hr=block(), ir=block())
         self.context = ModbusServerContext(devices=store, single=True)
         
@@ -108,7 +109,7 @@ class ModbusProtocol(BaseProtocol):
         m       = re.search(r'(\d+)', raw_fc)
         fc_num  = int(m.group(1)) if m else 3
 
-        reg   = write_register(payload)                       # ISCS address, else source reg
+        reg   = normalize_register(write_register(payload))   # ISCS addr, 4xxxx -> PDU offset
         bit   = int(payload.get('bit',  p.get('bit',  0)))
         width = field_width(payload.get('addr_size'), p.get('states', {}))
         val   = int(value)
