@@ -5028,13 +5028,25 @@ class App(tk.Tk):
                 sheets = wb.sheetnames
                 self.after(0, lambda: self._excel_file_loaded(wb, sheets, load_win, path))
             except Exception as e:
-                self.after(0, lambda: self._excel_load_failed(e, load_win))
+                # Log the real cause; the except-scoped `e` must be bound as a default
+                # so the marshalled lambda still sees it (Python 3 clears `e` on exit).
+                logger.exception("Excel load failed for %s", path)
+                self.after(0, lambda e=e: self._excel_load_failed(e, load_win))
 
         threading.Thread(target=parse_thread, daemon=True).start()
 
     def _excel_load_failed(self, err, load_win):
-        load_win.destroy()
-        messagebox.showerror("Excel Error", f"Failed to load file.\n{err}", parent=self)
+        try:
+            load_win.destroy()
+        except Exception:
+            pass
+        if isinstance(err, PermissionError):
+            msg = ("Could not open the file — it looks like it is open in another "
+                   "program (usually Excel). Close the file there and try again.\n\n"
+                   f"{err}")
+        else:
+            msg = f"Failed to load file.\n{err}"
+        messagebox.showerror("Excel Error", msg, parent=self)
 
     def _excel_file_loaded(self, wb, sheets, load_win, path):
         load_win.destroy()
