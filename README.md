@@ -1,92 +1,235 @@
-# AutoClick
+# WilloWisp — ISCS AutoClick Test Automation Framework
 
+> Closed-loop, evidence-generating UI test automation for SCADA / HMI systems
+> (Integrated Supervisory Control System — alarm panels, alarm/event lists, equipment pages).
 
+A single Windows desktop application (`baru.py`) that triggers alarm points over an industrial
+protocol (Modbus / SNMP), verifies what appears on the SCADA screen (OCR + colour + timestamp +
+template matching), and produces screenshots, screen recordings, and consolidated HTML/Excel reports.
 
-## Getting started
+It replaces manual, alarm-by-alarm acceptance testing of hundreds-to-thousands of points with a
+repeatable suite that leaves a full audit trail.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+---
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Running the app
 
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin http://192.168.82.27:7788/willowglen-labs/incubator/autoclick.git
-git branch -M main
-git push -uf origin main
+```bash
+python baru.py
 ```
 
-## Integrate with your tools
+**Requirements** (all optional — features degrade gracefully if a dependency is missing):
 
-- [ ] [Set up project integrations](http://192.168.82.27:7788/willowglen-labs/incubator/autoclick/-/settings/integrations)
+| Dependency | Enables |
+|---|---|
+| `pyautogui`, `keyboard` | click / type / hotkey automation |
+| `Pillow (PIL)` | screen capture, zone drawing |
+| `screeninfo` | multi-monitor detection |
+| `pandas`, `openpyxl` | Excel IO-list import + report export |
+| Tesseract-OCR (path in `config.json`) | text verification |
+| `opencv-python` | image / template matching, recording frames |
+| `imageio` + `imageio-ffmpeg` | MP4 screen recording |
+| `pymodbus`, `pysnmp` | protocol triggers |
 
-## Collaborate with your team
+Settings such as the Tesseract path and timing tolerances live in **`config.json`** (see bottom).
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+---
 
-## Test and Deploy
+## Three operating modes
 
-Use the built-in continuous integration in GitLab.
+The app header (`baru.py`) describes itself as a *UI Testing, Closed-Loop Test Automation Framework*
+with three modes:
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+1. **Targeted Sequence (RPA)** — record/replay a fixed click+type sequence.
+2. **Grid Scan (Fuzzer)** — sweep a grid of click points across a region.
+3. **Suite Runner (Modbus + OCR Closed-Loop)** — the main mode: trigger → verify → reset across an
+   imported IO list, looping and reporting. **This is what the rest of this document covers.**
 
-***
+---
 
-# Editing this README
+## Module map
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+| File | Lines | Responsibility |
+|---|---:|---|
+| `baru.py` | ~7400 | Main Tkinter app — UI, scenario cards, suite runner, monitor/zone management, Modbus/SNMP handlers, **IO-profile metadata store** |
+| `iscs_workflow.py` | ~4350 | Procedure Flow engine — step types, per-IO flow tree, `ProcedureRunner`, flow-editor dialogs |
+| `iscs_reports.py` | ~1590 | Result normalization, HTML dashboard, Excel export, evidence file tree |
+| `iscs_assets.py` | ~1010 | Reusable text/image/region/template asset repository (`iscs_assets.json`) |
+| `iscs_recorder.py` | ~480 | Background per-card MP4 screen recorder with overlays + hourly auto-split |
+| `iscs_OCR.py` | ~170 | Tesseract wrapper with adaptive image preprocessing |
+| `iscs_Sampler_Anchor.py` | — | *(optional)* Visual anchoring + frame sampling for shifting SCADA layouts. Loaded if present; the app sets `UPGRADES_AVAILABLE=False` and runs without it otherwise. |
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+Each module has one clear responsibility and communicates through plain dataclasses / JSON, which is
+why subsystems (asset binding, metadata store) were added without rewriting the core.
 
-## Name
-Choose a self-explaining name for your project.
+---
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## Core concepts
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 1. Monitors & Zones
+The app detects connected monitors; on a chosen monitor the user draws rectangular **zones** that map
+to screen areas. Zones are stored as pixel coordinates relative to the monitor and persist with the card:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- `alarm_panel` — the main alarm banner/strip
+- `alarm_list` — the scrolling alarm list table
+- `event_list` — the historical event log
+- `equipment_page` — the equipment detail view
+- `anchor` — a stable landmark used to re-resolve the other zones at runtime if the layout shifts
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+A drawn set of zones + navigation click points can be saved/loaded as a reusable **template**
+(`iscs_template.json`).
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### 2. IO List (Excel import) + Metadata Store
+An Excel sheet defines the test data — one row per alarm point: `point_id`,
+`equipment_description`, `attribute_description`, station/location, Modbus/SNMP address, and a
+**states** table (`v0` = normal/reset, `v1` = alarm/trigger; trigger vs reset index is derived from
+the states, never hardcoded).
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Imported IO lists are cached in a local SQLite database **`iscs_metadata.db`** as named **profiles**
+(tables `profiles` + `io_points`, keyed by file hash + sheet). The `MetadataBrowserDialog` lets the
+user re-load a previously imported list without re-parsing the spreadsheet — import once, reuse across
+runs and cards.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### 3. Scenario Cards & Suites
+A **scenario card** bundles a monitor, a zone set, an IO list (or subset), a loop count, and an
+execution flow. Multiple cards form a **Suite** that runs sequentially, with results aggregated into
+one report.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### 4. Procedure Flow (the "how")
+Rather than hardcoding the sequence, the system builds an ordered, editable **flow** of steps and
+executes it generically (`auto_register_procedures()` inspects zones + IO list to build a sensible
+default).
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+**Per-IO folders:** every IO point gets its own `IOGroup` folder holding a full copy of the step
+sequence — so one point can be customized without affecting the other 1,999.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+- **Action steps:** `TRIGGER_ALARM`, `RESET_ALARM`, `NAVIGATE_HOME`, `NAVIGATE_ALARM_LIST`,
+  `NAVIGATE_EVENT_LIST`, `NAVIGATE_EQUIP_PAGE`, `CLICK`, `RIGHT_CLICK`, `HOTKEY`, `TYPE_TEXT`
+- **Verify steps:** `VERIFY_ALARM_PANEL`, `VERIFY_NORMALIZE`, `VERIFY_ALARM_LIST`,
+  `VERIFY_EVENT_LIST`, `VERIFY_EQUIP_PAGE`, `VERIFY_ALARM_PANEL_CUSTOM`, `VERIFY_CUSTOM`
+- **Utility steps:** `DELAY`, `SCREENSHOT`
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+The Flow Editor (`ProcedureFlowDialog`) shows the IO-grouped tree with a context-sensitive toolbar
+(add / edit / duplicate / delete / reorder / enable-disable), multi-select, right-click actions
+including **Apply to All IOs**, and a live search filter.
 
-## License
-For open source projects, say how it is licensed.
+---
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Verification engine
+
+For each point, the alarm-panel check (`verify_alarm_panel`) runs a poll loop for up to
+`detection_duration_sec`, grabbing the zone and evaluating:
+
+- **OCR text** (`iscs_OCR.run` / `run_digits`) — identifier, description, value, with fuzzy matching.
+  Adaptive preprocessing decides inversion/brightness/sharpen/binarize for SCADA fonts; PSM is chosen
+  per layout mode (`tabular`, `block`, `single_line`, `sparse`).
+- **Severity** — word-boundary match with a digit-cell fallback for an isolated `0`/`1`.
+- **Colour + blink** — sampler frames checked against the expected RGB (red alarm / green normal).
+- **Datetime** — SCADA on-screen clock vs trigger time, within `datetime_sync_limit_sec`.
+
+Then **reset** the alarm and verify it normalizes; repeat for alarm/event/equipment zones if present.
+
+### Asset binding (verify anything, no IO row needed)
+`iscs_assets.py` provides a persistent repository (`iscs_assets.json`) of **Text** (`TXT_*`),
+**Image** (`IMG_*`, crops in `assets/images/`), **Region** (`RGN_*`), and **Flow Template** (`TPL_*`)
+assets. A `VERIFY_CUSTOM` step carries a `binding` (`TEXT` / `IMAGE` / `HYBRID`) that resolves a
+region, grabs it, and checks an OCR substring and/or `cv2.matchTemplate` score against a threshold.
+This lets a flow verify status icons, mode indicators, or button labels with **zero IO list and zero
+drawn zones** — and reuse one asset across hundreds of steps.
+
+---
+
+## Recording (`iscs_recorder.py`)
+Per-card MP4 capture: configurable FPS (1/5/10/15/24/30/60, default 5), wall-clock + point-identifier
+overlay burned into frames, hourly auto-split, multi-monitor aware, written via `imageio-ffmpeg`
+(H.264 `ultrafast`). A pre-flight check estimates file size and warns on low disk.
+
+---
+
+## Rerun system
+Failed points can be retried `N` times or **until pass**, at the suite level. **Every attempt is
+preserved** in the report (Attempt 0 FAIL → Attempt 1 PASS …) so an engineer can see exactly what
+changed.
+
+---
+
+## Reporting (`iscs_reports.py`)
+At the end, `ReportManager.generate_reports()` calls `normalize_results()` to consolidate every loop,
+card, and rerun attempt, then writes a single **`Suite_Report.html`** (overall pass rate, loop→card
+tree auto-expanding failures, per-point step trace, execution history, collapsible evidence file tree
+with FAIL auto-expanded) plus a multi-sheet **Excel** workbook.
+
+### Output layout
+```
+test_logs/
+└── <title>_suite_<timestamp>/
+    ├── Suite_Report.html
+    ├── <suite>.xlsx
+    ├── test_run.log
+    └── loop_0001/
+        └── 1_<CardName>/
+            ├── 0000_<point>_alarm_panel_trigger_PASS.png
+            ├── 0000_<point>_alarm_panel_normalize_FAIL.png
+            ├── <CardName>_<ts>.mp4
+            └── failures/
+                └── 0000_<point>_<ts>/
+                    ├── crop_zone_*.png
+                    ├── expected_vs_actual_comparison.json
+                    ├── alarm_metadata.json
+                    └── timestamp_delta.json
+```
+
+---
+
+## End-to-end flow (TL;DR)
+> **Import IO list (cached as a profile) → pick monitor → draw zones (or load template) →
+> auto-build a per-point Procedure Flow → SuiteRunner loops every point
+> (trigger ▶ OCR/colour/time verify ▶ reset ▶ verify) capturing screenshots/video →
+> reruns failures → emits one consolidated `Suite_Report.html` + Excel.**
+
+```
+Import IO List ─► Pick Monitor ─► Draw Zones / Load Template ─► Auto-gen Procedure Flow
+      │                                                                    │
+      └──────────────────────────────► RUN (SuiteRunner thread) ◄─────────┘
+                                              │
+                  loop cards × loop count ────┤
+                                              ▼
+                 per IO point: TRIGGER → verify(OCR+colour+time) → RESET → verify
+                                              │
+                       save screenshots / recording / diagnostics
+                                              │
+                     reruns for failed points → normalize → Report (HTML + Excel)
+```
+
+---
+
+## Key configuration (`config.json`)
+
+| Setting | Effect |
+|---|---|
+| `tesseract_cmd` / `tesseract_lang` | Path to `tesseract.exe` and OCR language |
+| `modbus_port` | Modbus TCP port (default 502) |
+| `detection_duration_sec` | How long to poll for the alarm to appear + observe colour/blink |
+| `datetime_sync_limit_sec` | Max allowed SCADA-clock vs trigger-time gap before datetime FAILs |
+| `nav_wait_sec` | Pause between navigation clicks |
+| `sampler_interval_ms` / `sampler_duration_sec` | Colour/blink frame-grab rate and window |
+| `scada_timeout_sec` | SCADA response timeout |
+| `click_delay`, `mouse_drift_px`, `grid_spacing` | RPA / grid-scan timing & spacing |
+
+---
+
+## Related docs
+- [`ISCS_AutoClick_Overview.md`](ISCS_AutoClick_Overview.md) — design rationale, comparison to
+  commercial tools (Eggplant/TestComplete), limitations, and future vision.
+- [`SUITE_RUNNER_FLOW.md`](SUITE_RUNNER_FLOW.md) — stage-by-stage suite-run flow with Mermaid
+  diagrams and `file:line` references into the code.
+- [`ARCHITECTURE_REQUIREMENTS.md`](ARCHITECTURE_REQUIREMENTS.md) — proposed plugin/registry
+  modernization spec: functional & non-functional requirements (FR-1…30, NFR-1…13) and target
+  architecture diagram.
+- [`ARCHITECTURE_DESIGN.md`](ARCHITECTURE_DESIGN.md) — assessment, risks, abstraction layers &
+  interfaces, design patterns, and the Strangler-Fig migration strategy for the modernization.
+
+## Current limitations
+Single-machine (captures the local display), desktop GUI required (no headless/CI), single-user. The
+optional `iscs_Sampler_Anchor.py` upgrade module may be absent, in which case visual anchoring/frame
+sampling is disabled.
